@@ -1,0 +1,25 @@
+{
+  "name": "job-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Autonomous sourcing and application pipeline for remote design roles.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "seed:knowledge": "tsx scripts/seed-knowledge.ts",
+    "ingest": "tsx worker/index.ts ingest",
+    "process": "tsx worker/index.ts process",
+    "outreach": "tsx worker/index.ts outreach",
+    "followup": "tsx worker/index.ts followup"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

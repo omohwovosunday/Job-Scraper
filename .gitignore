@@ -1,0 +1,30 @@
+# --- Knowledge base: NEVER commit. Repo is public. ---
+# Populated at runtime from Supabase. See knowledge/README.md.
+/knowledge/*
+!/knowledge/README.md
+
+# --- Secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+
+# --- Resumes (personal documents) ---
+/assets/resumes/
+
+# --- Node ---
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# --- Next.js / Vercel (dashboard, step 8) ---
+/app/.next/
+/app/out/
+.vercel
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
