@@ -157,17 +157,17 @@ it is email by construction.
 
 ## The pre-filter, and why it exists
 
-Nothing reaches the model until the cheap checks have run. Over the 1,392 rows
-currently held:
+Nothing reaches the model until the cheap checks have run. Over 2,557 listings
+from six sources and 46 ATS boards:
 
 | | Rows |
 |---|---|
-| No design signal in the title | 786 |
-| Region excluded by the employer's own location field | 487 |
-| Hybrid or onsite by the location field | 82 |
-| **Reach the scorer** | **37** |
+| No design signal in the title | 1,364 |
+| Region excluded by the employer's own location field | 882 |
+| Hybrid or onsite by the location field | 225 |
+| **Reach the scorer** | **86** |
 
-Four API calls instead of 140. Spending a model call to rediscover that "Remote -
+Nine API calls instead of 256. Spending a model call to rediscover that "Remote -
 United States" excludes a Lagos applicant is spending money to read a field the
 employer already filled in.
 
@@ -187,6 +187,36 @@ Descriptions are truncated head-and-tail rather than head-only. Eligibility line
 sit at the *foot* of a long listing, after the benefits and the EEO boilerplate,
 and the longest description seen ran to 18,894 characters against a 4,000 budget.
 A head-only cut would discard the sentence that decides the hard zero.
+
+## What each source is actually for
+
+Measured across 2,557 rows, the sources do different jobs and the numbers are not
+close:
+
+| Source | Rows | Comp stated | Pre-filter survivors | Claim worldwide |
+|---|---|---|---|---|
+| Greenhouse (22 boards) | 1,754 | 0% | 46 | 1 |
+| Ashby (21 boards) | 401 | **58%** | 9 | 0 |
+| Himalayas | 203 | 37% | 9 | 2 |
+| RemoteOK | 99 | 13% | 8 | 0 |
+| Lever (3 boards) | 69 | 0% | 3 | 0 |
+| We Work Remotely | 31 | 0% | **14** | **12** |
+
+Two sources earn their place for opposite reasons. **Ashby is the compensation
+source** — 234 of the 323 comp-stated rows in the whole database come from it, and
+without it `below_rate` and the tiered junior floor would never fire at all. It
+contributes almost nothing to the eligible pool, because its companies are mostly
+US or EU restricted.
+
+**We Work Remotely is the eligibility source.** Thirty-one rows, the smallest feed
+by an order of magnitude, and twelve of the seventeen roles that claim worldwide
+eligibility. Its `<region>` field is poster-supplied and errs optimistically, so
+treat "Anywhere in the World" as a claim to check rather than a guarantee — but on
+volume-to-usefulness it beats everything else here combined.
+
+Greenhouse is breadth. 1,754 rows for one worldwide-eligible role is the ratio the
+first watchlist measurement found, and adding fourteen more boards did not change
+it. It costs nothing to poll and the pre-filter discards the rest for free.
 
 ## Email
 
