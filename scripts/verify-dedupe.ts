@@ -15,7 +15,7 @@
  *   npx tsx scripts/verify-dedupe.ts
  */
 
-import { db } from '../worker/lib/db.js';
+import { db, selectAllRows } from '../worker/lib/db.js';
 import { runIngest } from '../worker/lib/ingest.js';
 import { SOURCES } from '../worker/sources/index.js';
 
@@ -27,19 +27,21 @@ async function rowCount(): Promise<number> {
   return count ?? 0;
 }
 
-/** The unique constraint should make this impossible. Check anyway. */
-async function findDuplicateHashes(): Promise<string[]> {
-  const { data, error } = await db().from('opportunities').select('dedupe_hash');
-  if (error) throw new Error(`duplicate scan failed: ${error.message}`);
+/**
+ * The unique constraint should make this impossible. Check anyway — and page,
+ * because an unpaged select stops at 1,000 rows without saying so, which would
+ * have this function confidently report on a prefix of the table.
+ */
+async function findDuplicateHashes(): Promise<{ duplicates: string[]; scanned: number }> {
+  const rows = await selectAllRows<{ dedupe_hash: string }>('opportunities', 'dedupe_hash');
 
   const seen = new Set<string>();
   const duplicates = new Set<string>();
-  for (const row of data ?? []) {
-    const hash = row.dedupe_hash as string;
-    if (seen.has(hash)) duplicates.add(hash);
-    seen.add(hash);
+  for (const row of rows) {
+    if (seen.has(row.dedupe_hash)) duplicates.add(row.dedupe_hash);
+    seen.add(row.dedupe_hash);
   }
-  return [...duplicates];
+  return { duplicates: [...duplicates], scanned: rows.length };
 }
 
 async function main(): Promise<void> {
@@ -55,11 +57,12 @@ async function main(): Promise<void> {
   }
 
   const after = await rowCount();
-  const duplicates = await findDuplicateHashes();
+  const { duplicates, scanned } = await findDuplicateHashes();
 
   console.log('--- verification ---');
   console.log(`inserted per pass : ${inserted.join(', ')}`);
   console.log(`rows before/after : ${before} / ${after}`);
+  console.log(`hashes scanned    : ${scanned}`);
   console.log(`duplicate hashes  : ${duplicates.length}`);
 
   const failures: string[] = [];
@@ -72,6 +75,12 @@ async function main(): Promise<void> {
   }
   if (duplicates.length > 0) {
     failures.push(`${duplicates.length} dedupe_hash values appear more than once.`);
+  }
+  if (scanned !== after) {
+    failures.push(
+      `scanned ${scanned} hashes but the table holds ${after} rows — ` +
+        'the scan is truncating and this check is only reporting on a prefix.',
+    );
   }
   const expected = before + inserted.reduce((a, b) => a + b, 0);
   if (after !== expected) {
