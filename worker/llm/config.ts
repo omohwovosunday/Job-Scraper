@@ -56,8 +56,11 @@ export const SCORING_CONFIG = {
   // --- Availability ---
   hoursPerWeek: 30,
   earliestStartWeeks: 2,
-  contractTypes: ['contract', 'part-time', 'full-time'] as const,
-  preferredContractTypes: ['contract', 'part-time'] as const,
+  // Every engagement shape is acceptable, so there is nothing here for the scorer
+  // to deduct on. Seniority is likewise not a filter — internship through staff
+  // are all in scope; see the Role fit section of scorer.prompt.md.
+  contractTypes: ['contract', 'part-time', 'full-time', 'internship'] as const,
+  preferredContractTypes: ['contract', 'part-time', 'full-time'] as const,
 
   // --- Location ---
   location: 'Lagos, Nigeria',
@@ -85,7 +88,11 @@ export const RED_FLAGS = [
   'below_rate',             // comp STATED and below floor
   'region_ambiguous',       // eligibility unclear, worth applying but uncertain
   'timezone_strain',        // requires >5h overlap with US Pacific or APAC
-  'seniority_mismatch',     // staff/principal/lead-of-leads, or clearly junior
+  // NOT for a role below his experience, and not for one asking more years than
+  // he has. Every level from internship to staff is in scope. Reserved for a post
+  // with no hands-on design in it at all — managing managers, running a
+  // department — which is the wrong job rather than the wrong level.
+  'seniority_mismatch',
   'crypto_web3',
   'agency_hostile',         // "no agencies, no freelancers, direct only"
   'comp_unstated',          // informational only — NOT a deduction

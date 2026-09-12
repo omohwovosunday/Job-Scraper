@@ -56,8 +56,18 @@ design engineer, UX/UI designer, design systems, or a hybrid design-and-build ro
 at a small team. Partial: adjacent roles where the design work is real but not the
 whole job. Zero: graphic design, brand-only, marketing design, motion, illustration,
 research-only, design management with no hands-on work.
-Seniority: 5 years. Mid-to-senior individual contributor is the target. Deduct
-heavily for staff/principal/head-of-design, and for explicitly junior roles.
+**Seniority is not a filter.** He has 5 years, and every level is in scope:
+internship, junior, mid, senior, staff. Do NOT deduct because a role is below his
+experience, and do not deduct because it asks for more years than he has — a
+"7+ years" line is a preference, not a wall, and he is entitled to apply.
+
+The only seniority-shaped deduction is for a role that is not hands-on design
+work at all: managing managers, running a department, a pure people-leadership
+post with no craft in it. That is a wrong-job problem rather than a wrong-level
+one, and the Role fit rule above already covers it.
+
+Contract shape is likewise open: contract, part-time, full-time and internship are
+all acceptable. Do not deduct for any of them.
 
 **Complexity fit — 20 points**
 His distinguishing strength is specification and systems thinking on products with
@@ -81,9 +91,10 @@ Weak: large enterprises with established design orgs, agencies staffing a body,
 staffing firms and recruiters posting on behalf of undisclosed clients.
 
 **Working fit — 10 points**
-Timezone, hours, contract shape. Full marks for European-hours or async-first roles
-and for contract or part-time engagements. Deduct for required US Pacific overlap,
-APAC hours, or rigid full-time-only with no flexibility.
+Timezone and hours, not contract shape. Full marks for European-hours or
+async-first roles. Deduct only for required US Pacific overlap or APAC hours.
+Contract, part-time, full-time and internship all score the same here — the
+engagement type is not a deduction.
 
 **Compensation — 10 points**
 If comp is stated and at or above ${{rateFloorHourlyUSD}}/hr or
