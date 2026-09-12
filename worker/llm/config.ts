@@ -67,7 +67,10 @@ export const SCORING_CONFIG = {
 
   // --- Batch ---
   listingsPerCall: 10,
-  model: 'claude-haiku-4-5-20251001',
+  // Undated ID. The date-suffixed form that was in the spec
+  // ('claude-haiku-4-5-20251001') is not a current model string and would fail
+  // validation. Model IDs are complete as written — never append a date.
+  model: 'claude-haiku-4-5',
 } as const;
 
 export const HARD_ZEROS = [
