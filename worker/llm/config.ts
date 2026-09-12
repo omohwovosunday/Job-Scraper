@@ -67,10 +67,10 @@ export const SCORING_CONFIG = {
 
   // --- Batch ---
   listingsPerCall: 10,
-  // Undated ID. The date-suffixed form that was in the spec
-  // ('claude-haiku-4-5-20251001') is not a current model string and would fail
-  // validation. Model IDs are complete as written — never append a date.
-  model: 'claude-haiku-4-5',
+
+  // The scoring model is NOT set here. It lives in provider.ts, chosen by
+  // SCORER_PROVIDER, because the choice carries a provider-specific JSON contract
+  // with it and a bare model string here would be half the decision.
 } as const;
 
 export const HARD_ZEROS = [

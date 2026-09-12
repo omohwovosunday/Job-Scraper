@@ -9,6 +9,7 @@
 import { prefilter, truncateForScoring } from '../worker/llm/prefilter.js';
 import { validateScore, interpolate } from '../worker/llm/scorer.js';
 import { parseJsonLoosely } from '../worker/llm/client.js';
+import { scoringModel, scorerSchema, resetScoringModel } from '../worker/llm/provider.js';
 
 const failures: string[] = [];
 
@@ -188,7 +189,62 @@ function promptInterpolation(): void {
   check('a missing placeholder throws instead of shipping literal braces', threw);
 }
 
+function providerSelection(): void {
+  console.log('\nprovider selection');
+
+  const original = process.env.SCORER_PROVIDER;
+  const restore = () => {
+    if (original === undefined) delete process.env.SCORER_PROVIDER;
+    else process.env.SCORER_PROVIDER = original;
+    resetScoringModel();
+  };
+
+  // The label is what the score report attributes scores to, so a wrong provider
+  // must be visible rather than silent.
+  process.env.SCORER_PROVIDER = 'gemini';
+  resetScoringModel();
+  check(`gemini selected: ${scoringModel().label}`, scoringModel().label.startsWith('gemini:'));
+
+  process.env.SCORER_PROVIDER = 'anthropic';
+  resetScoringModel();
+  check(`anthropic selected: ${scoringModel().label}`, scoringModel().label.startsWith('anthropic:'));
+
+  // Case should not decide which model scores your applications.
+  process.env.SCORER_PROVIDER = 'GEMINI';
+  resetScoringModel();
+  check('provider name is case-insensitive', scoringModel().label.startsWith('gemini:'));
+
+  process.env.SCORER_PROVIDER = 'openai';
+  resetScoringModel();
+  let threw = false;
+  try { scoringModel(); } catch { threw = true; }
+  check('an unknown provider throws rather than defaulting silently', threw);
+
+  delete process.env.SCORER_PROVIDER;
+  resetScoringModel();
+  check('default is gemini', scoringModel().label.startsWith('gemini:'));
+
+  restore();
+
+  // Gemini rejects schemas outside the subset it supports, and a rejected schema
+  // fails the whole batch — so the schema stays minimal and validateScore does the
+  // real work.
+  const schema = scorerSchema(['below_rate', 'comp_unstated']);
+  const items = schema['items'] as Record<string, unknown>;
+  const required = items['required'] as string[];
+  check('schema is an array of objects', schema['type'] === 'array' && items['type'] === 'object');
+  check('only the three load-bearing fields are required',
+    required.length === 3 && required.includes('source_id') && required.includes('score'),
+    JSON.stringify(required));
+  check('the suggestion fields are optional, not nullable enums',
+    !required.includes('suggested_case_study') && !required.includes('suggested_resume_variant'));
+  const props = items['properties'] as Record<string, Record<string, unknown>>;
+  const flagEnum = (props['red_flags']?.['items'] as Record<string, unknown>)['enum'] as string[];
+  check('flag enum is passed through', flagEnum.includes('comp_unstated'));
+}
+
 function main(): void {
+  providerSelection();
   prefilterExclusions();
   prefilterPassThrough();
   prefilterRoles();

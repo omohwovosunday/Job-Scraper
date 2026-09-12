@@ -1,8 +1,10 @@
 /**
  * worker/llm/scorer.ts
  *
- * Scores listings for fit. Model: Haiku — this is high-volume filtering, not
- * writing.
+ * Scores listings for fit. High-volume filtering, not writing, so it runs on
+ * Gemini Flash by default — see provider.ts. The stage never touches an SDK: which
+ * model scores is an env var, because the two providers disagree about how JSON
+ * comes back and that disagreement should not reach this file.
  *
  * The prompt lives in scorer.prompt.md and is read at run time rather than
  * duplicated here, so tuning the rubric is editing prose, not code. Numbers are
@@ -19,7 +21,7 @@
 import { readFile } from 'node:fs/promises';
 import { db, selectAllRowsWhere } from '../lib/db.js';
 import { getKnowledge } from '../lib/knowledge.js';
-import { anthropic, parseJsonLoosely, textOf } from './client.js';
+import { scoringModel, scorerSchema, type JsonModel } from './provider.js';
 import {
   ALL_FLAGS,
   CASE_STUDIES,
@@ -181,20 +183,21 @@ export function validateScore(raw: RawScore, allowedIds: Set<string>): { id: str
 }
 
 async function scoreBatch(
+  model: JsonModel,
   systemPrompt: string,
   batch: Candidate[],
 ): Promise<Map<string, ScoreResult> | null> {
   const allowedIds = new Set(batch.map((r) => r.source_id ?? r.id));
+  const schema = scorerSchema(ALL_FLAGS);
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const message = await anthropic().messages.create({
-      model: SCORING_CONFIG.model,
-      max_tokens: 2048,
+    const parsed = (await model.completeJson({
       system: systemPrompt,
-      messages: [{ role: 'user', content: buildUserMessage(batch) }],
-    });
+      user: buildUserMessage(batch),
+      schema,
+      maxOutputTokens: 2048,
+    })) as RawScore[] | null;
 
-    const parsed = parseJsonLoosely<RawScore[]>(textOf(message));
     if (!Array.isArray(parsed)) {
       console.error(`  batch parse failed (attempt ${attempt})`);
       continue;
@@ -283,11 +286,12 @@ export async function runScore(limit?: number): Promise<ScorerStats> {
 
   // --- Stage 2: score what is left ---------------------------------------
   //
-  // Construct the client before touching a single batch. Without this, a missing
-  // API key surfaced once per batch and each failure quarantined ten perfectly
-  // good rows as 'failed' — 37 rows written off over a misconfiguration. Fail
-  // here instead, before anything is marked.
-  anthropic();
+  // Resolve the model before touching a single batch. Without this, a missing API
+  // key surfaced once per batch and each failure quarantined ten perfectly good
+  // rows as 'failed' — 37 rows written off over a misconfiguration. Fail here
+  // instead, before anything is marked. Resolving also validates SCORER_PROVIDER.
+  const model = scoringModel();
+  console.log(`scoring with ${model.label}`);
   const systemPrompt = await buildSystemPrompt();
 
   for (const batch of chunk(survivors, SCORING_CONFIG.listingsPerCall)) {
@@ -296,7 +300,7 @@ export async function runScore(limit?: number): Promise<ScorerStats> {
     // problem, not the model returning nonsense, and those rows deserve a retry on
     // the next run rather than a status that excludes them for good. The SDK has
     // already retried three times by this point, so the stage aborting is right.
-    const results = await scoreBatch(systemPrompt, batch);
+    const results = await scoreBatch(model, systemPrompt, batch);
 
     if (results === null) {
       // Quarantine the batch and keep going. Never crash the run.
