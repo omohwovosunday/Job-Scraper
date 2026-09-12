@@ -196,12 +196,13 @@ alter table settings           enable row level security;
 alter table knowledge          enable row level security;
 alter table company_watchlist  enable row level security;
 
-alter table opportunities      force row level security;
-alter table sent_log           force row level security;
-alter table prospects          force row level security;
-alter table settings           force row level security;
-alter table knowledge          force row level security;
-alter table company_watchlist  force row level security;
+-- FORCE ROW LEVEL SECURITY is deliberately NOT used. Postgres skips row security
+-- for roles holding BYPASSRLS, which is how Supabase's service_role works, so FORCE
+-- would not change the worker's access. What FORCE does change is the table owner's
+-- access — and the owner is the role the SQL editor runs as. The result would be a
+-- dashboard where `select * from opportunities` returns nothing and looks broken.
+-- ENABLE plus zero policies already gives the property that matters: the anon key,
+-- which is public in a public repo, grants nothing at all.
 
 -- NOTE for step 8 (dashboard)
 -- No policies exist, so the anon and authenticated roles can read nothing. The
