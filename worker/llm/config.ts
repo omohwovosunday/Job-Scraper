@@ -8,7 +8,7 @@
  * NO committed defaults. This repo is public. See CLAUDE-CODE-INSTRUCTIONS.md 2.3.
  */
 
-import { requireNumber } from '../lib/env.js';
+import { optionalNumber, requireNumber } from '../lib/env.js';
 
 /**
  * Commercial figures. Read from the environment, memoised, and deliberately NOT
@@ -20,6 +20,13 @@ import { requireNumber } from '../lib/env.js';
 export type Commercial = {
   rateFloorHourlyUSD: number;
   rateFloorMonthlyUSD: number;
+  /**
+   * Lower floor for internship, graduate and junior postings, which routinely pay
+   * below the standard floor. Without a separate figure, widening the search to
+   * those levels would have been undone by below_rate firing on every one of them.
+   */
+  juniorRateFloorHourlyUSD: number;
+  juniorRateFloorMonthlyUSD: number;
   /** Below this a listing is skipped. Start at 75; drop toward 65 once trusted. */
   scoreThreshold: number;
 };
@@ -28,15 +35,33 @@ let commercialCache: Commercial | undefined;
 
 export function commercial(): Commercial {
   if (commercialCache) return commercialCache;
+
+  const hourly = requireNumber(
+    'RATE_FLOOR_HOURLY_USD',
+    'Drives the below_rate flag. Without it the scorer cannot judge compensation.',
+  );
+  const monthly = requireNumber(
+    'RATE_FLOOR_MONTHLY_USD',
+    'Drives the below_rate flag for full-time-shaped roles.',
+  );
+  const juniorHourly = requireNumber(
+    'RATE_FLOOR_JUNIOR_HOURLY_USD',
+    'Floor for internship and junior postings, which pay below the standard floor.',
+  );
+
   commercialCache = {
-    rateFloorHourlyUSD: requireNumber(
-      'RATE_FLOOR_HOURLY_USD',
-      'Drives the below_rate flag. Without it the scorer cannot judge compensation.',
-    ),
-    rateFloorMonthlyUSD: requireNumber(
-      'RATE_FLOOR_MONTHLY_USD',
-      'Drives the below_rate flag for full-time-shaped roles.',
-    ),
+    rateFloorHourlyUSD: hourly,
+    rateFloorMonthlyUSD: monthly,
+    juniorRateFloorHourlyUSD: juniorHourly,
+    /**
+     * Only an hourly junior floor was specified. Rather than invent an unrelated
+     * monthly figure, this holds the same ratio to the standard monthly floor as
+     * the junior hourly does to the standard hourly — 15/25 of 3,000 is 1,800.
+     * Set RATE_FLOOR_JUNIOR_MONTHLY_USD to override it with a real number.
+     */
+    juniorRateFloorMonthlyUSD:
+      optionalNumber('RATE_FLOOR_JUNIOR_MONTHLY_USD') ??
+      Math.round((monthly * (juniorHourly / hourly)) / 50) * 50,
     scoreThreshold: requireNumber(
       'SCORE_THRESHOLD',
       'Below this a listing is skipped. Start at 75.',

@@ -158,6 +158,8 @@ export async function buildSystemPrompt(): Promise<string> {
     contractTypes: SCORING_CONFIG.contractTypes.join(', '),
     rateFloorHourlyUSD: String(c.rateFloorHourlyUSD),
     rateFloorMonthlyUSD: String(c.rateFloorMonthlyUSD),
+    juniorRateFloorHourlyUSD: String(c.juniorRateFloorHourlyUSD),
+    juniorRateFloorMonthlyUSD: String(c.juniorRateFloorMonthlyUSD),
     scoreThreshold: String(c.scoreThreshold),
   });
 }

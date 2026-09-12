@@ -97,9 +97,23 @@ Contract, part-time, full-time and internship all score the same here — the
 engagement type is not a deduction.
 
 **Compensation — 10 points**
-If comp is stated and at or above ${{rateFloorHourlyUSD}}/hr or
-${{rateFloorMonthlyUSD}}/month, award proportionally to how far above.
-If comp is stated and BELOW the floor, award 0 here and set `below_rate`.
+
+There are two floors, and which one applies depends on the level of the posting.
+
+| Posting level | Hourly floor | Monthly floor |
+|---|---|---|
+| internship, graduate, entry, junior | ${{juniorRateFloorHourlyUSD}}/hr | ${{juniorRateFloorMonthlyUSD}}/month |
+| everything else | ${{rateFloorHourlyUSD}}/hr | ${{rateFloorMonthlyUSD}}/month |
+
+Decide the level from what the listing says about itself — "Intern", "Graduate",
+"Junior", "Entry level" in the title, or a stated range like 0-2 years. Do not
+infer a junior level from a low salary; that reasoning is circular and would
+excuse any underpaid role.
+
+If comp is stated and at or above the applicable floor, award proportionally to how
+far above. If comp is stated and below the applicable floor, award 0 here and set
+`below_rate`.
+
 If comp is NOT stated, award 5 and set `comp_unstated`. Missing comp is normal and
 must not be treated as a negative — most of the market omits it.
 

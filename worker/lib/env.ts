@@ -39,3 +39,14 @@ export function optionalString(key: string): string | undefined {
   const raw = process.env[key];
   return raw === undefined || raw.trim() === '' ? undefined : raw.trim();
 }
+
+/** Like requireNumber, but absent means "not configured" rather than an error. */
+export function optionalNumber(key: string): number | undefined {
+  const raw = optionalString(key);
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(`Environment variable ${key} must be a number, got ${JSON.stringify(raw)}.`);
+  }
+  return n;
+}
