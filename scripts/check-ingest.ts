@@ -11,6 +11,7 @@
 import { dedupeHash, normaliseCompany, normaliseTitle } from '../worker/lib/dedupe.js';
 import { htmlToText } from '../worker/lib/text.js';
 import { remoteok } from '../worker/sources/remoteok.js';
+import { BoardNotFoundError, fetchBoard } from '../worker/sources/greenhouse.js';
 
 const failures: string[] = [];
 
@@ -199,12 +200,52 @@ async function liveFeed(): Promise<void> {
   }
 }
 
+async function liveGreenhouseBoard(): Promise<void> {
+  console.log('\nlive Greenhouse board (airtable — the smallest verified board)');
+  const listings = await fetchBoard({ company: 'Airtable', board_token: 'airtable' });
+  check(`fetched ${listings.length} listings keyless`, listings.length > 0);
+
+  const withMarkup = listings
+    .map((l) => ({ title: l.title, residue: markupResidue(l.description ?? '') }))
+    .filter((r) => r.residue.length > 0);
+  check('no description contains markup residue', withMarkup.length === 0,
+    withMarkup.length > 0
+      ? `e.g. "${withMarkup[0]?.title}" (${withMarkup[0]?.residue.join(', ')})`
+      : '');
+
+  check('every listing has a description', listings.every((l) => (l.description ?? '').length > 0));
+  check('source ids are board-scoped and unique',
+    new Set(listings.map((l) => l.sourceId)).size === listings.length &&
+      listings.every((l) => l.sourceId.startsWith('airtable:')));
+  check('compensation is null, not a fabricated zero',
+    listings.every((l) => l.compRaw === null));
+  check('hashes are deterministic',
+    listings.map(dedupeHash).every((h, i) => h === dedupeHash(listings[i]!)));
+
+  // location.name is the reason this source is worth more than the aggregators:
+  // the hard zeros are pre-labelled rather than buried in prose.
+  const locations = [...new Set(listings.map((l) => l.location).filter((l) => l !== null))];
+  console.log(`  location values: ${JSON.stringify(locations.slice(0, 6))}`);
+  const labelled = listings.filter((l) => /remote|hybrid|onsite|on-site/i.test(l.location ?? ''));
+  console.log(`  ${labelled.length}/${listings.length} carry a remote/hybrid label in the location field`);
+
+  console.log('\n  bad board token is reported, not fatal');
+  try {
+    await fetchBoard({ company: 'Nope', board_token: 'definitely-not-a-real-board-xyz' });
+    check('404 raises BoardNotFoundError', false, 'no error was thrown');
+  } catch (err: unknown) {
+    check('404 raises BoardNotFoundError', err instanceof BoardNotFoundError,
+      err instanceof Error ? err.constructor.name : String(err));
+  }
+}
+
 async function main(): Promise<void> {
   companyNormalisation();
   titleNormalisation();
   hashing();
   htmlStripping();
   await liveFeed();
+  await liveGreenhouseBoard();
 
   console.log('');
   if (failures.length > 0) {

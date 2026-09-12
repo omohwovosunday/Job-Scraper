@@ -16,8 +16,8 @@ Under construction, in build order. Currently at step 3 of 10.
 | 1 | Repo, gitignore, TypeScript scaffold | done |
 | 2 | Supabase schema, knowledge seeding | done |
 | 3 | Ingest: RemoteOK, with dedupe verified | code done, DB check pending |
-| 4 | Ingest: one Greenhouse board from the watchlist | next |
-| 5 | Apply-path resolver and classification | |
+| 4 | Ingest: Greenhouse company boards | code done, DB check pending |
+| 5 | Apply-path resolver and classification | next |
 | 6 | Scorer, dry run — **review gate** | |
 | 7 | Drafter, dry run — **review gate** | |
 | 8 | Dashboard: queue, sent log, kill switch | |
@@ -71,6 +71,26 @@ npm run typecheck
   policies, so the anon key grants nothing. The worker uses the service role key;
   the dashboard queries server-side with it. Never expose it to a browser bundle.
 - Secrets live in GitHub Actions secrets and Vercel env vars. Never committed.
+
+## Sourcing, and what the first measurement showed
+
+Two kinds of source. Aggregators (RemoteOK, and later We Work Remotely and
+Himalayas) give breadth. Greenhouse company boards give speed, because postings
+appear on a company's own board before they propagate anywhere else. The read APIs
+are public and keyless; only the *application* endpoints are gated, which is why
+discovery uses them and submission does not.
+
+The first pass over the starter watchlist produced a number worth stating plainly.
+Across eight boards and 1,378 open roles, 47 were design roles by title and **one**
+was plausibly eligible for a Lagos-based applicant. The other 46 were US-or-Canada
+only, hybrid, onsite, or tied to a specific other country — hard zeros on
+eligibility regardless of how well the work fits.
+
+The conclusion is not that the pipeline is broken. It is that picking companies by
+name optimises for the wrong variable. A watchlist should be built from employers
+who hire globally by policy, and eligibility filtering should happen before an LLM
+is ever asked to score anything, since `location.name` on a Greenhouse posting
+already says "Remote - United States" in structured form.
 
 ## Email
 
