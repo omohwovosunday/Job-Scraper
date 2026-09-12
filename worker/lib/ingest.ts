@@ -60,9 +60,35 @@ function toRow(listing: RawListing): OpportunityRow {
 }
 
 /**
+ * How promising a location string is for a Lagos-based applicant. Higher wins.
+ *
+ * This exists because of a real collision. Companies post one role several times,
+ * once per region, as separate postings with the same company, title and date —
+ * so they share a dedupe_hash by design. GitLab lists the same BDR role for
+ * "Remote, North America" and for "Remote, EMEA", and Remote.com splits a single
+ * Accountant opening across six European countries.
+ *
+ * Keeping whichever arrived first means array order decides which variant of a
+ * role survives, and the one it discards may be the only one open to Nigeria.
+ * Widening the hash to include location is the wrong fix: RemoteOK leaves the
+ * location field empty on roughly a third of listings while Greenhouse fills it
+ * richly, so location in the hash would stop the same role collapsing across
+ * boards, which is the hash's entire purpose.
+ */
+function eligibilityPreference(location: string | null): number {
+  if (location === null) return 1; // unknown; the scorer will flag region_ambiguous
+  const l = location.toLowerCase();
+  if (/worldwide|global|anywhere/.test(l)) return 5;
+  if (/emea|africa/.test(l)) return 4;          // EMEA includes Nigeria
+  if (/hybrid|on-?site|in-office/.test(l)) return 0;  // hard zero either way
+  return 2;                                      // a specific country or city
+}
+
+/**
  * Postgres handles a conflicting row fine, but duplicate keys inside one payload
  * are wasted work and make the counts lie. Collapse them here so `inserted` and
- * `alreadyKnown` mean what they say.
+ * `alreadyKnown` mean what they say — and when two postings collide, keep the most
+ * promising rather than the first one seen.
  */
 function collapseByHash(rows: OpportunityRow[]): {
   unique: OpportunityRow[];
@@ -70,10 +96,20 @@ function collapseByHash(rows: OpportunityRow[]): {
 } {
   const byHash = new Map<string, OpportunityRow>();
   for (const row of rows) {
-    if (!byHash.has(row.dedupe_hash)) byHash.set(row.dedupe_hash, row);
+    const existing = byHash.get(row.dedupe_hash);
+    if (existing === undefined) {
+      byHash.set(row.dedupe_hash, row);
+      continue;
+    }
+    // Strictly greater, so ties keep the first and the result stays deterministic.
+    if (eligibilityPreference(row.location) > eligibilityPreference(existing.location)) {
+      byHash.set(row.dedupe_hash, row);
+    }
   }
   return { unique: [...byHash.values()], collapsed: rows.length - byHash.size };
 }
+
+export const __testing = { eligibilityPreference, collapseByHash };
 
 async function ingestSource(source: Source): Promise<SourceStats> {
   const listings = await source.fetch();

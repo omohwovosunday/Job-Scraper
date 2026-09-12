@@ -12,6 +12,7 @@ import { dedupeHash, normaliseCompany, normaliseTitle } from '../worker/lib/dedu
 import { htmlToText } from '../worker/lib/text.js';
 import { remoteok } from '../worker/sources/remoteok.js';
 import { BoardNotFoundError, fetchBoard } from '../worker/sources/greenhouse.js';
+import { __testing } from '../worker/lib/ingest.js';
 
 const failures: string[] = [];
 
@@ -200,6 +201,47 @@ async function liveFeed(): Promise<void> {
   }
 }
 
+/**
+ * Regression: companies post one role once per region as separate postings sharing
+ * a company, title and date — so they share a dedupe_hash. Keeping the first one
+ * seen let array order decide which region survived, and the discarded variant
+ * could be the only one open to Nigeria.
+ */
+function collisionPolicy(): void {
+  console.log('\ncollapse policy on colliding postings');
+  const { eligibilityPreference, collapseByHash } = __testing;
+
+  check('worldwide beats a single country',
+    eligibilityPreference('Remote - Worldwide') > eligibilityPreference('Remote - United States'));
+  check('EMEA beats a single country (EMEA includes Nigeria)',
+    eligibilityPreference('Remote, EMEA') > eligibilityPreference('Remote, North America'));
+  check('an unknown location beats hybrid',
+    eligibilityPreference(null) > eligibilityPreference('Hybrid - London'));
+  check('hybrid ranks lowest',
+    eligibilityPreference('Hybrid - San Francisco') < eligibilityPreference('Toronto'));
+
+  // The real GitLab case, in both array orders.
+  const posting = (location: string) => ({
+    source: 'greenhouse', source_id: `x-${location}`, dedupe_hash: 'same-hash',
+    company: 'GitLab', title: 'Business Development Representative',
+    description: null, url: 'https://example.com', location,
+    comp_raw: null, posted_at: null, status: 'new' as const,
+  });
+  const emea = 'Remote, EMEA; Remote, Germany';
+  const noram = 'Remote, North America';
+
+  for (const [label, rows] of [
+    ['EMEA first', [posting(emea), posting(noram)]],
+    ['NORAM first', [posting(noram), posting(emea)]],
+  ] as const) {
+    const { unique, collapsed } = collapseByHash([...rows]);
+    const kept = unique[0]?.location;
+    check(`${label}: collapses to 1 and keeps EMEA`,
+      unique.length === 1 && collapsed === 1 && kept === emea,
+      `kept ${JSON.stringify(kept)}`);
+  }
+}
+
 async function liveGreenhouseBoard(): Promise<void> {
   console.log('\nlive Greenhouse board (airtable — the smallest verified board)');
   const listings = await fetchBoard({ company: 'Airtable', board_token: 'airtable' });
@@ -244,6 +286,7 @@ async function main(): Promise<void> {
   titleNormalisation();
   hashing();
   htmlStripping();
+  collisionPolicy();
   await liveFeed();
   await liveGreenhouseBoard();
 
