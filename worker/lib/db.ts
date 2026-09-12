@@ -31,6 +31,39 @@ export async function selectAllRows<T>(table: string, columns: string): Promise<
   }
 }
 
+/**
+ * Paged select restricted to one column value — the queue read every stage needs,
+ * since each picks up whatever sits in its own status and must not assume the
+ * previous run finished.
+ *
+ * Ordered by a UNIQUE column, because offset paging is only stable under a total
+ * order. Ordering by discovered_at looked right and was not: a bulk insert gives
+ * every row in the batch the same timestamp — 1,392 rows shared 2 distinct values —
+ * so Postgres was free to order ties differently for each page, and a resolver pass
+ * silently saw 1,384 of 1,391 pending rows. Nothing errored.
+ */
+export async function selectAllRowsWhere<T>(
+  table: string,
+  columns: string,
+  column: string,
+  value: string,
+  orderBy = 'id',
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await db()
+      .from(table)
+      .select(columns)
+      .eq(column, value)
+      .order(orderBy, { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`select from ${table} failed: ${error.message}`);
+    const page = (data ?? []) as T[];
+    out.push(...page);
+    if (page.length < PAGE_SIZE) return out;
+  }
+}
+
 let client: SupabaseClient | undefined;
 
 export function db(): SupabaseClient {

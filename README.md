@@ -17,8 +17,8 @@ Under construction, in build order. Currently at step 3 of 10.
 | 2 | Supabase schema, knowledge seeding | done |
 | 3 | Ingest: RemoteOK, with dedupe verified | code done, DB check pending |
 | 4 | Ingest: Greenhouse company boards | code done, DB check pending |
-| 5 | Apply-path resolver and classification | next |
-| 6 | Scorer, dry run — **review gate** | |
+| 5 | Apply-path resolver and classification | done |
+| 6 | Scorer, dry run — **review gate** | next |
 | 7 | Drafter, dry run — **review gate** | |
 | 8 | Dashboard: queue, sent log, kill switch | |
 | 9 | First live sends — **review gate** | |
@@ -91,6 +91,32 @@ name optimises for the wrong variable. A watchlist should be built from employer
 who hire globally by policy, and eligibility filtering should happen before an LLM
 is ever asked to score anything, since `location.name` on a Greenhouse posting
 already says "Remote - United States" in structured form.
+
+## What the resolver found, and what it means for automation
+
+Classifying all 1,392 rows produced:
+
+| Apply method | Count | Routes to |
+|---|---|---|
+| `ats` | 1,293 | manual queue |
+| `form` | 99 | manual queue |
+| `email` | **0** | would be automated |
+
+Email is the only automated send channel, so at present the pipeline can automate
+zero applications. Every row goes to the manual queue.
+
+That is not a defect in the resolver. It follows from two facts established
+earlier: ATS application endpoints require an employer-held key an applicant
+cannot get, and RemoteOK deliberately obfuscates its outbound apply link so the
+employer's real apply path is not machine-readable. Spec §5.2 expected a third to
+a half of listings to resolve to email or ATS; 93% do resolve to ATS, but §3.3
+then routes ATS to the manual queue, which leaves nothing for the automated path.
+
+So the value here is discovery, scoring and drafting, with the dashboard's
+one-click assist — copy the letter, open the apply URL — carrying the last step in
+under ten seconds. Two things would change that: aggregators that surface smaller
+companies who accept applications by email, and the outreach track, which is email
+by construction and therefore automatable end to end.
 
 ## Email
 

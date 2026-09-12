@@ -12,6 +12,7 @@
  */
 
 import { runIngest } from './lib/ingest.js';
+import { runResolve } from './resolve/index.js';
 import { readSettings } from './lib/settings.js';
 import { SOURCES } from './sources/index.js';
 
@@ -57,6 +58,21 @@ async function main(): Promise<void> {
       // retries it, and the other sources already did their work.
       if (failed.length === result.perSource.length && failed.length > 0) {
         throw new Error('every source failed');
+      }
+
+      // Spec 2 puts apply-path resolution in this stage, after dedupe.
+      const resolved = await runResolve();
+      const { byMethod } = resolved;
+      console.log(
+        `resolve considered=${resolved.considered} fetched=${resolved.fetched} ` +
+          `ats=${byMethod.ats} email=${byMethod.email} form=${byMethod.form} ` +
+          `unresolved=${byMethod.unresolved}`,
+      );
+      if (resolved.discoveredBoards > 0) {
+        console.log(
+          `resolve discovered ${resolved.discoveredBoards} new ATS board(s), stored inactive ` +
+            '— review company_watchlist and set active = true to poll them',
+        );
       }
       break;
     }

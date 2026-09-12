@@ -16,7 +16,8 @@
     "ingest": "tsx worker/index.ts ingest",
     "process": "tsx worker/index.ts process",
     "outreach": "tsx worker/index.ts outreach",
-    "followup": "tsx worker/index.ts followup"
+    "followup": "tsx worker/index.ts followup",
+    "check:resolve": "tsx scripts/check-resolve.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
