@@ -55,9 +55,29 @@ export type JsonModel = {
 // --- Gemini -----------------------------------------------------------------
 
 /**
- * Default scoring model. Flash rather than Flash-Lite: the rubric has six weighted
- * dimensions and calibration anchors, which is judgement rather than lookup.
- * Flash-Lite is the cheaper swap if the scores hold up.
+ * Default scoring model. Flash rather than Flash-Lite, and this has now been
+ * measured rather than assumed.
+ *
+ * Both models scored the same three passing listings. Flash: 89, 88, 85.
+ * Flash-Lite: 82, 84, and 0 — where the 0 went to Remote.com's Senior Product
+ * Designer with the reason "Remote requires candidates to reside in specific
+ * approved countries/regions, excluding Nigeria". That restriction does not exist.
+ * The listing reads "Location: Anywhere in the world" and the company's own copy
+ * is about hiring anyone anywhere and bringing wealth to developing countries.
+ * Flash-Lite invented a disqualifying fact and zeroed the best-matching role in
+ * the entire corpus.
+ *
+ * A false negative here is invisible: the row is marked skipped and nobody looks
+ * at it again. It is strictly worse than a false positive, which a human catches
+ * when reading the draft. Flash-Lite also chose vouchera (consumer loyalty) for a
+ * benefits-platform design role where rentos or pocketlawyers fit better.
+ *
+ * Note also that gemini-2.5-flash and gemini-2.5-flash-lite return 404 "no longer
+ * available to new users", so stepping down a generation is not an option either.
+ *
+ * The catch: gemini-3.5-flash free tier allows roughly 20 requests per DAY, not
+ * per minute — three 50-second waits did not clear it. That is not enough to run
+ * this pipeline, so the model choice and the billing choice are the same decision.
  */
 const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash';
 
