@@ -19,7 +19,9 @@
     "followup": "tsx worker/index.ts followup",
     "check:resolve": "tsx scripts/check-resolve.ts",
     "check:scorer": "tsx scripts/check-scorer.ts",
-    "score:report": "tsx scripts/score-report.ts"
+    "score:report": "tsx scripts/score-report.ts",
+    "check:ats": "tsx scripts/check-ats.ts",
+    "detect:watchlist": "tsx scripts/detect-watchlist.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

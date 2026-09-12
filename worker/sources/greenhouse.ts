@@ -25,8 +25,8 @@
  * There are no published rate limits. Poll on schedule, not aggressively.
  */
 
-import { db } from '../lib/db.js';
 import { blankToNull, htmlToText } from '../lib/text.js';
+import { BoardNotFoundError, pollBoards, type WatchlistEntry } from './watchlist.js';
 import type { RawListing, Source } from './types.js';
 
 const SLUG = 'greenhouse';
@@ -43,19 +43,6 @@ type GreenhouseJob = {
   first_published?: string;
   updated_at?: string;
 };
-
-export type WatchlistEntry = {
-  id?: string;
-  company: string;
-  board_token: string;
-};
-
-export class BoardNotFoundError extends Error {
-  constructor(public readonly boardToken: string) {
-    super(`Greenhouse board "${boardToken}" returned 404. The token is wrong or the board was removed.`);
-    this.name = 'BoardNotFoundError';
-  }
-}
 
 function parsePostedAt(job: GreenhouseJob): Date | null {
   for (const raw of [job.first_published, job.updated_at]) {
@@ -98,7 +85,7 @@ export async function fetchBoard(entry: WatchlistEntry): Promise<RawListing[]> {
     signal: AbortSignal.timeout(60_000),
   });
 
-  if (response.status === 404) throw new BoardNotFoundError(entry.board_token);
+  if (response.status === 404) throw new BoardNotFoundError(SLUG, entry.board_token);
   if (!response.ok) {
     throw new Error(
       `Greenhouse board "${entry.board_token}" returned ${response.status} ${response.statusText}`,
@@ -123,51 +110,7 @@ export async function fetchBoard(entry: WatchlistEntry): Promise<RawListing[]> {
   return listings;
 }
 
-async function loadWatchlist(): Promise<WatchlistEntry[]> {
-  const { data, error } = await db()
-    .from('company_watchlist')
-    .select('id, company, board_token')
-    .eq('ats_vendor', SLUG)
-    .eq('active', true);
-
-  if (error) throw new Error(`Failed to load watchlist: ${error.message}`);
-  return (data ?? []) as WatchlistEntry[];
-}
-
-async function recordPoll(entry: WatchlistEntry, pollError: string | null): Promise<void> {
-  if (entry.id === undefined) return;
-  const { error } = await db()
-    .from('company_watchlist')
-    .update({ last_polled_at: new Date().toISOString(), last_poll_error: pollError })
-    .eq('id', entry.id);
-  // Bookkeeping must not sink a run that already fetched its listings.
-  if (error) console.error(`  could not record poll for ${entry.company}: ${error.message}`);
-}
-
 export const greenhouse: Source = {
   slug: SLUG,
-
-  async fetch(): Promise<RawListing[]> {
-    const watchlist = await loadWatchlist();
-    if (watchlist.length === 0) {
-      console.log('  greenhouse: watchlist is empty, nothing to poll');
-      return [];
-    }
-
-    const all: RawListing[] = [];
-    for (const entry of watchlist) {
-      try {
-        const listings = await fetchBoard(entry);
-        all.push(...listings);
-        console.log(`  greenhouse/${entry.board_token}: ${listings.length} listings`);
-        await recordPoll(entry, null);
-      } catch (err: unknown) {
-        // One dead board token must not cost the other seven their run.
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`  greenhouse/${entry.board_token} failed: ${message}`);
-        await recordPoll(entry, message);
-      }
-    }
-    return all;
-  },
+  fetch: () => pollBoards(SLUG, fetchBoard),
 };

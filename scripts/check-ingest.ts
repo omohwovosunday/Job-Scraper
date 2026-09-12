@@ -11,7 +11,8 @@
 import { dedupeHash, normaliseCompany, normaliseTitle } from '../worker/lib/dedupe.js';
 import { htmlToText } from '../worker/lib/text.js';
 import { remoteok } from '../worker/sources/remoteok.js';
-import { BoardNotFoundError, fetchBoard } from '../worker/sources/greenhouse.js';
+import { fetchBoard } from '../worker/sources/greenhouse.js';
+import { BoardNotFoundError } from '../worker/sources/watchlist.js';
 import { __testing } from '../worker/lib/ingest.js';
 
 const failures: string[] = [];
