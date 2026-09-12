@@ -20,7 +20,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { db, selectAllRowsWhere } from '../lib/db.js';
-import { getKnowledge } from '../lib/knowledge.js';
+import { caseStudyKey, getKnowledge } from '../lib/knowledge.js';
 import { scoringModel, scorerSchema, type JsonModel } from './provider.js';
 import {
   ALL_FLAGS,
@@ -98,10 +98,56 @@ export function interpolate(template: string, values: Record<string, string>): s
   return out;
 }
 
+/** Pulls one "## Heading" section out of a case study, without its heading. */
+export function extractSection(markdown: string, heading: string): string | null {
+  const start = markdown.indexOf(`## ${heading}`);
+  if (start === -1) return null;
+  const after = markdown.indexOf('\n', start);
+  if (after === -1) return null;
+  const next = markdown.indexOf('\n## ', after);
+  const body = (next === -1 ? markdown.slice(after) : markdown.slice(after, next)).trim();
+  return body.length === 0 ? null : body;
+}
+
+/**
+ * A compact index of what each case study covers, for the scorer to match against.
+ *
+ * The prompt has always told the model to "consult the `Applies to` line of each
+ * case study" — and never supplied one. It knew four slugs by name and nothing
+ * about their contents, so it omitted suggested_case_study entirely, which would
+ * have left the drafter with no project to open a letter with. Knowledge §7 is
+ * explicit that the `Applies to` line is the matching surface, so that is what
+ * goes in, plus the sector for context.
+ *
+ * Deliberately not the full text. The scorer needs to pick one from four; the
+ * drafter gets the chosen study in full, which is where the detail earns its
+ * tokens. This adds roughly 700 characters to a prompt sent once per batch.
+ */
+export async function buildCaseStudyIndex(): Promise<string> {
+  const entries: string[] = [];
+  for (const slug of CASE_STUDIES) {
+    const md = await getKnowledge(caseStudyKey(slug));
+    const appliesTo = extractSection(md, 'Applies to');
+    const sector = /^\*\*Sector:\*\*\s*(.+)$/m.exec(md)?.[1]?.trim() ?? null;
+
+    // A study with no Applies-to line cannot be matched on, and silently offering
+    // it would be worse than leaving it out.
+    if (appliesTo === null) {
+      console.error(`  case study "${slug}" has no Applies to section; omitted from the index`);
+      continue;
+    }
+    const oneLine = appliesTo.replace(/\s+/g, ' ').trim();
+    entries.push(`- ${slug}${sector === null ? '' : ` (${sector})`}: ${oneLine}`);
+  }
+  if (entries.length === 0) throw new Error('No case studies have an Applies to section.');
+  return entries.join('\n');
+}
+
 export async function buildSystemPrompt(): Promise<string> {
   const c = commercial();
   return interpolate(await loadSystemPromptTemplate(), {
     PROFILE_MD: await getKnowledge('profile'),
+    CASE_STUDY_INDEX: await buildCaseStudyIndex(),
     location: SCORING_CONFIG.location,
     timezone: SCORING_CONFIG.timezone,
     usEasternOverlapHours: String(SCORING_CONFIG.usEasternOverlapHours),

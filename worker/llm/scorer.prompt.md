@@ -123,10 +123,15 @@ For anything scoring at or above {{scoreThreshold}}, choose:
 - `ai-training` only for AI training, evaluation, or expert-data roles.
 - `product-design` otherwise.
 
-`suggested_case_study` — one of: rentos | payafta | pocketlawyers | vouchera.
+`suggested_case_study` — pick the one whose work bears most on this role, from:
+
+{{CASE_STUDY_INDEX}}
+
 Match on the problem shape, not the industry label. A B2B dashboard role matches
-rentos even if the company is not proptech. Consult the `Applies to` line of each
-case study.
+rentos even if the company is not proptech. Always name one for a listing above
+the threshold: the drafter opens the application with that project, so a missing
+choice leaves it with nothing concrete to lead on. If none is a clean fit, choose
+the closest and let the draft confidence reflect it.
 
 ## Output
 
