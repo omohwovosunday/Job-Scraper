@@ -17,7 +17,7 @@
  */
 
 import { selectAllRows } from '../worker/lib/db.js';
-import { commercial } from '../worker/llm/config.js';
+import { commercial, HARD_ZEROS } from '../worker/llm/config.js';
 
 type Row = {
   title: string;
@@ -81,19 +81,35 @@ async function main(): Promise<void> {
   console.log(`\n${(share * 100).toFixed(0)}% of scores sit in 60-80` +
     (share > 0.6 ? '  <-- COMPRESSED: the scorer is not discriminating' : '  (reasonable spread)'));
 
-  // Comp leakage check, which the prompt asks to be monitored rather than asserted.
+  /**
+   * Comp leakage check, which the prompt asks to be monitored rather than asserted.
+   *
+   * Only rows actually scored on the rubric count. The prompt tells the model to
+   * return 0 and stop evaluating the moment a hard zero applies, so a zeroed row
+   * never reaches the compensation dimension and carries no comp flag either way.
+   * Counting those as "comp stated" compares hard zeros against real scores and
+   * produces a frightening, meaningless gap — this read 2.1 versus 41.9 before the
+   * zeros were excluded.
+   */
+  const hardZeroFlags = new Set<string>(HARD_ZEROS);
+  const onRubric = modelScored.filter(
+    (r) => (r.score ?? 0) > 0 && !flagsOf(r).some((f) => hardZeroFlags.has(f)),
+  );
   const avg = (rows: Row[]) => rows.length === 0 ? null
     : rows.reduce((a, r) => a + (r.score ?? 0), 0) / rows.length;
-  const unstated = modelScored.filter((r) => flagsOf(r).includes('comp_unstated'));
-  const stated = modelScored.filter((r) => !flagsOf(r).includes('comp_unstated'));
+  const unstated = onRubric.filter((r) => flagsOf(r).includes('comp_unstated'));
+  const stated = onRubric.filter((r) => !flagsOf(r).includes('comp_unstated'));
   const uAvg = avg(unstated);
   const sAvg = avg(stated);
+  console.log(`\nscored on the rubric (not hard-zeroed): ${onRubric.length}`);
   if (uAvg !== null && sAvg !== null) {
     console.log(`mean score: comp stated ${sAvg.toFixed(1)} (n=${stated.length})  ·  ` +
       `comp unstated ${uAvg.toFixed(1)} (n=${unstated.length})`);
     if (uAvg < sAvg - 8) {
       console.log('  <-- comp-unstated is trending low; the prompt is leaking a penalty it forbids');
     }
+  } else {
+    console.log('mean score: not comparable yet — one of the two groups is empty');
   }
 
   const flagTally: Record<string, number> = {};

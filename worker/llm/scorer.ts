@@ -182,24 +182,77 @@ export function validateScore(raw: RawScore, allowedIds: Set<string>): { id: str
   return { id, result: { score, reason, redFlags: flags, resumeVariant: variant, caseStudy } };
 }
 
+type BatchOutcome = {
+  results: Map<string, ScoreResult> | null;
+  truncated: boolean;
+  calls: number;
+};
+
+/**
+ * Scores a batch, halving it and retrying if the response runs out of tokens.
+ *
+ * A fixed batch size cannot be right for both ends of this corpus: descriptions
+ * run from a couple of hundred characters to nearly 19,000, so ten short listings
+ * fit comfortably in one response while ten long ones do not. Raising the ceiling
+ * for everyone pays for the worst case on every call; halving on demand pays only
+ * where it is needed. Recursion bottoms out at a single listing, which either fits
+ * or is genuinely unscoreable.
+ */
+async function scoreWithSplit(
+  model: JsonModel,
+  systemPrompt: string,
+  batch: Candidate[],
+): Promise<BatchOutcome> {
+  const outcome = await scoreBatch(model, systemPrompt, batch);
+  if (!outcome.truncated || batch.length <= 1) return outcome;
+
+  const mid = Math.ceil(batch.length / 2);
+  console.log(`  splitting a truncated batch of ${batch.length} into ${mid} + ${batch.length - mid}`);
+
+  const left = await scoreWithSplit(model, systemPrompt, batch.slice(0, mid));
+  const right = await scoreWithSplit(model, systemPrompt, batch.slice(mid));
+
+  const merged = new Map<string, ScoreResult>();
+  for (const half of [left, right]) {
+    for (const [k, v] of half.results ?? []) merged.set(k, v);
+  }
+  return {
+    results: merged.size > 0 ? merged : null,
+    truncated: false,
+    calls: outcome.calls + left.calls + right.calls,
+  };
+}
+
 async function scoreBatch(
   model: JsonModel,
   systemPrompt: string,
   batch: Candidate[],
-): Promise<Map<string, ScoreResult> | null> {
+): Promise<BatchOutcome> {
   const allowedIds = new Set(batch.map((r) => r.source_id ?? r.id));
   const schema = scorerSchema(ALL_FLAGS);
+  let calls = 0;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const parsed = (await model.completeJson({
+    calls += 1;
+    const result = await model.completeJson({
       system: systemPrompt,
       user: buildUserMessage(batch),
       schema,
-      maxOutputTokens: 2048,
-    })) as RawScore[] | null;
+      // Ten objects of about seventy tokens each, plus reasoning, plus headroom.
+      // 2048 was not enough once thinking tokens were counted against it.
+      maxOutputTokens: 8192,
+    });
+    const parsed = result.value as RawScore[] | null;
 
     if (!Array.isArray(parsed)) {
-      console.error(`  batch parse failed (attempt ${attempt})`);
+      // Say which failure it was. "Parse failed" sent me looking at the JSON
+      // parser when the response had actually been cut off at the token limit.
+      if (result.truncated) {
+        // Retrying with an identical budget reproduces the same truncation; the
+        // caller splits the batch instead.
+        return { results: null, truncated: true, calls };
+      }
+      console.error(`  batch parse failed (attempt ${attempt}, status=${result.status})`);
       continue;
     }
 
@@ -211,10 +264,10 @@ async function scoreBatch(
       else results.set(validated.id, validated.result);
     }
     if (dropped > 0) console.error(`  dropped ${dropped} invalid object(s) from batch`);
-    if (results.size > 0) return results;
+    if (results.size > 0) return { results, truncated: false, calls };
     console.error(`  batch produced no usable objects (attempt ${attempt})`);
   }
-  return null;
+  return { results: null, truncated: false, calls };
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -295,12 +348,13 @@ export async function runScore(limit?: number): Promise<ScorerStats> {
   const systemPrompt = await buildSystemPrompt();
 
   for (const batch of chunk(survivors, SCORING_CONFIG.listingsPerCall)) {
-    stats.apiCalls += 1;
     // Deliberately not wrapped. An exception here is a transport, auth or quota
     // problem, not the model returning nonsense, and those rows deserve a retry on
     // the next run rather than a status that excludes them for good. The SDK has
     // already retried three times by this point, so the stage aborting is right.
-    const results = await scoreBatch(model, systemPrompt, batch);
+    const outcome = await scoreWithSplit(model, systemPrompt, batch);
+    stats.apiCalls += outcome.calls;
+    const results = outcome.results;
 
     if (results === null) {
       // Quarantine the batch and keep going. Never crash the run.
