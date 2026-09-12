@@ -4,11 +4,14 @@
   "private": true,
   "description": "Autonomous sourcing and application pipeline for remote design roles.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "seed:knowledge": "tsx scripts/seed-knowledge.ts",
     "check:ingest": "tsx scripts/check-ingest.ts",
+    "verify:email": "tsx scripts/verify-email.ts",
     "verify:dedupe": "tsx scripts/verify-dedupe.ts",
     "ingest": "tsx worker/index.ts ingest",
     "process": "tsx worker/index.ts process",
@@ -16,11 +19,16 @@
     "followup": "tsx worker/index.ts followup"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@supabase/supabase-js": "^2.45.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "imapflow": "^2.0.2",
+    "nodemailer": "^10.0.9",
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/nodemailer": "^8.0.1",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0"
   }

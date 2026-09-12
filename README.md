@@ -72,6 +72,30 @@ npm run typecheck
   the dashboard queries server-side with it. Never expose it to a browser bundle.
 - Secrets live in GitHub Actions secrets and Vercel env vars. Never committed.
 
+## Email
+
+Three senders behind one `send()` function, resolved per channel. Not three
+codepaths.
+
+| Sender | Transport | Used for |
+|---|---|---|
+| `application` | Gmail SMTP, `smtp.gmail.com:587` STARTTLS | job applications, plain text, resume attached |
+| `outreach` | Zoho Mail Lite, `smtp.zoho.com:465` SSL | cold outreach from a separate warmed domain |
+| `system` | ZeptoMail API | run failures, cap hits, reply notifications |
+
+Applications send from the owner's real Gmail address because it has to match the
+resume and LinkedIn or it reads as spam. Outreach sends from a separate domain so
+that if its reputation burns, real correspondence is unaffected. Caps are per
+sender, not global.
+
+No tracking pixels, no link shorteners, no HTML on `application` or `outreach`.
+Outreach bodies carry a real unsubscribe line. Every application and outreach send
+writes its full body to `sent_log` before returning.
+
+Delivery has no webhooks over SMTP, so bounces are read back from the outreach
+mailbox over IMAP, and a rolling 7-day bounce rate above 3% trips the kill switch
+on that channel without waiting for anyone to notice.
+
 ## Scope
 
 No LinkedIn or Upwork automation — their terms prohibit it.
