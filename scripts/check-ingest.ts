@@ -63,6 +63,36 @@ function titleNormalisation(): void {
     'seniority is not stripped',
     normaliseTitle('Senior Product Designer') !== normaliseTitle('Product Designer'),
   );
+
+  // Regression: the three ATS vendors decorate the same role three ways.
+  // Greenhouse "Senior Product Designer", Lever "... (Remote)", Ashby
+  // "... - Remote". Only the bracketed forms were handled, so the Ashby variant
+  // hashed differently and would have produced a second application to one job.
+  const decorated = [
+    'Senior Product Designer',
+    'Senior Product Designer (Remote)',
+    'Senior Product Designer - Remote',
+    'Senior Product Designer, Remote',
+    'Senior Product Designer – Remote',
+    'Senior Product Designer - Remote - Contract',
+    'Senior Product Designer [EU]',
+  ].map(normaliseTitle);
+  check(`all decoration forms collapse -> "${decorated[0]}"`,
+    new Set(decorated).size === 1, JSON.stringify([...new Set(decorated)]));
+
+  // The other direction: stripping must be anchored to the end and limited to
+  // known decoration, or real title content disappears.
+  const keep: [string, string][] = [
+    ['Designer - Systems', 'systems'],
+    ['Design Engineer - Platform', 'platform'],
+    ['Product Designer, Growth', 'growth'],
+    ['Head of Remote', 'remote'],
+    ['Remote Operations Manager', 'operations'],
+  ];
+  for (const [title, mustKeep] of keep) {
+    check(`"${title}" keeps "${mustKeep}"`, normaliseTitle(title).includes(mustKeep),
+      `got "${normaliseTitle(title)}"`);
+  }
 }
 
 function hashing(): void {

@@ -54,12 +54,28 @@ export function normaliseCompany(company: string | null | undefined): string {
  * Titles vary in decoration between boards for the same role — bracketed
  * locations, seniority in parentheses, trailing "(Remote)".
  */
+/**
+ * Decoration that boards append to the same role. Stripped whether it arrives
+ * parenthesised, bracketed, or after a dash or comma at the end of the title.
+ *
+ * The dash form is not hypothetical: Greenhouse publishes "Senior Product
+ * Designer", Lever "Senior Product Designer (Remote)" and Ashby "Senior Product
+ * Designer - Remote". Handling only the bracketed forms left the Ashby variant
+ * normalising to "senior product designer remote", a different hash, and a second
+ * application to the same job.
+ */
+const TITLE_DECORATION =
+  '(?:remote|worldwide|anywhere|global|hybrid|onsite|on[\\s-]?site|full[\\s-]?time|part[\\s-]?time|contract|permanent|freelance)';
+
 export function normaliseTitle(title: string): string {
   return title
     .normalize('NFKD')
     .toLowerCase()
-    .replace(/\((?:remote|worldwide|anywhere|global|full[\s-]?time|contract)\)/g, ' ')
+    .replace(new RegExp(`\\(\\s*${TITLE_DECORATION}\\s*\\)`, 'g'), ' ')
     .replace(/\[[^\]]*\]/g, ' ')
+    // Trailing ", remote" / " - remote" / " – remote", one or more of them.
+    // Anchored to the end so "Designer - Systems" keeps its second half.
+    .replace(new RegExp(`(?:\\s*[,–—-]\\s*${TITLE_DECORATION})+\\s*$`, 'g'), ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
