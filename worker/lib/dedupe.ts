@@ -77,6 +77,31 @@ export function normalisePostedDate(postedAt: Date | null | undefined): string {
   return postedAt.toISOString().slice(0, 10);
 }
 
+/**
+ * KNOWN LIMIT, measured across 1,617 rows from four sources.
+ *
+ * The hash catches most duplicates but misses two shapes, and both were observed:
+ *
+ *   1. Company-name variants. RemoteOK publishes "Interaction Design Foundation";
+ *      We Work Remotely publishes "IxDF - Interaction Design Foundation". The
+ *      acronym prefix survives normalisation, so the same three IxDF course roles
+ *      exist twice. Stripping abbreviation prefixes is a rabbit hole with no end.
+ *   2. Disagreeing dates. We Work Remotely publishes no pubDate at all, so its
+ *      date segment is empty while another board's is a real date — GitLab's "AI
+ *      Transformation Owner" is duplicated across WWR and Greenhouse for exactly
+ *      this reason.
+ *
+ * Only 3-4 genuine duplicates exist in 1,617 rows, but they fall disproportionately
+ * in the slice that matters: three of them are IxDF roles, which are three of the
+ * four plausible candidates the pre-filter surfaces.
+ *
+ * The fix does not belong here. Ingest-time dedupe is best-effort by nature, and
+ * the guarantee that matters is "never apply twice to one job", which belongs at
+ * the send and queue gate where spec 5.5 already checks sent_log. Widening that
+ * check to role level — same normalised title at a similar company, already sent —
+ * catches both shapes at the only point where a duplicate does harm. Build it with
+ * step 9.
+ */
 export function dedupeHash(input: {
   company: string | null | undefined;
   title: string;

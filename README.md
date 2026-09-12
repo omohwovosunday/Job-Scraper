@@ -93,6 +93,38 @@ who hire globally by policy, and eligibility filtering should happen before an L
 is ever asked to score anything, since `location.name` on a Greenhouse posting
 already says "Remote - United States" in structured form.
 
+Adding the aggregators bore that out. Across 1,617 rows from four sources:
+
+| Source | Rows | Pass the pre-filter | Claim worldwide eligibility |
+|---|---|---|---|
+| Greenhouse (8 boards) | 1,293 | 29 | 1 |
+| Himalayas | 194 | 9 | 2 |
+| RemoteOK | 99 | 8 | 0 |
+| We Work Remotely | 31 | 14 | 12 |
+
+We Work Remotely has the fewest rows and the most usable ones — 31 listings, every
+one of them `Anywhere in the World`, against one worldwide role in Greenhouse's
+1,293. Himalayas has the best-structured data anywhere in the system
+(`locationRestrictions` as an array where empty genuinely means unrestricted,
+`timezoneRestrictions` as UTC offsets, real structured salary), but its feed has no
+working category filter and a fixed 20-row page, so only the most recent 200
+postings are read per run and few are design roles.
+
+Two caveats found by cross-checking sources against each other:
+
+- **`<region>` on We Work Remotely is not authoritative.** GitLab's "AI
+  Transformation Owner, Product & Design" is `Anywhere in the World` there and
+  `Remote, Canada; Remote, United Kingdom; Remote, United States` on GitLab's own
+  Greenhouse board. The field is filled in by whoever posted the ad and errs
+  optimistically, which is the direction that turns a hard zero into an apparent
+  match.
+- **Cross-source dedupe misses company-name variants.** "Interaction Design
+  Foundation" and "IxDF - Interaction Design Foundation" are the same employer and
+  hash differently, so three IxDF roles exist twice. Only 3-4 genuine duplicates
+  exist across 1,617 rows, but they land disproportionately in the slice that
+  matters. See the note on `dedupeHash` — the guarantee belongs at the send gate,
+  not at ingest.
+
 ## What the resolver found, and what it means for automation
 
 Classifying all 1,392 rows produced:
@@ -103,21 +135,25 @@ Classifying all 1,392 rows produced:
 | `form` | 99 | manual queue |
 | `email` | **0** | would be automated |
 
-Email is the only automated send channel, so at present the pipeline can automate
-zero applications. Every row goes to the manual queue.
+Email is the only automated send channel, so the pipeline can automate zero
+applications. Every row goes to the manual queue.
 
-That is not a defect in the resolver. It follows from two facts established
-earlier: ATS application endpoints require an employer-held key an applicant
-cannot get, and RemoteOK deliberately obfuscates its outbound apply link so the
-employer's real apply path is not machine-readable. Spec §5.2 expected a third to
-a half of listings to resolve to email or ATS; 93% do resolve to ATS, but §3.3
-then routes ATS to the manual queue, which leaves nothing for the automated path.
+**This was tested, not assumed.** The hypothesis was that aggregators surfacing
+smaller companies would yield `mailto:` apply addresses and move `email` off zero.
+We Work Remotely and Himalayas were added specifically to find out. They did not:
+all three aggregators keep the employer's apply path behind their own page —
+RemoteOK by obfuscating the outbound link in JavaScript, the other two by returning
+403 to non-browser agents. That click is their business model. Their feeds are the
+interface they publish for machines, and those work fine; spoofing a browser user
+agent to read the HTML anyway would be evading an access control, not using a
+public API.
 
-So the value here is discovery, scoring and drafting, with the dashboard's
-one-click assist — copy the letter, open the apply URL — carrying the last step in
-under ten seconds. Two things would change that: aggregators that surface smaller
-companies who accept applications by email, and the outreach track, which is email
-by construction and therefore automatable end to end.
+Combined with ATS endpoints requiring an employer-held key, there is no automated
+application path available from any source we have. So this is an assistant, not an
+autonomous sender: discovery, scoring and drafting, with the dashboard's one-click
+assist — copy the letter, open the apply URL — carrying the last step in under ten
+seconds. The outreach track remains the only genuinely automatable channel, because
+it is email by construction.
 
 ## The pre-filter, and why it exists
 

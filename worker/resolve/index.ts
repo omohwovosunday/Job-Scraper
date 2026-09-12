@@ -60,7 +60,29 @@ const OPAQUE_AGGREGATORS: { host: RegExp; note: string }[] = [
     host: /(?:^|\.)remoteok\.com$/i,
     note: 'RemoteOK obfuscates the outbound apply link in JavaScript; not machine-readable by design',
   },
+  {
+    host: /(?:^|\.)weworkremotely\.com$/i,
+    note: 'We Work Remotely returns 403 to non-browser agents; the RSS feed is the sanctioned interface',
+  },
+  {
+    host: /(?:^|\.)himalayas\.app$/i,
+    note: 'Himalayas returns 403 to non-browser agents; the JSON API is the sanctioned interface',
+  },
 ];
+
+/**
+ * All three aggregators keep the employer's apply path behind their own page — by
+ * obfuscation on RemoteOK, by a 403 on the other two. That is their business model:
+ * the outbound click is the product. Their feeds are the interface they publish for
+ * machines, and those work; the HTML pages are for people, and spoofing a browser
+ * user agent to read them anyway would be evading an access control rather than
+ * using a public API.
+ *
+ * The practical consequence is that aggregator listings are always 'form', which is
+ * what spec 5.2's "anything else" row prescribes. Listing the hosts here rather
+ * than discovering it per row matters: 225 rows each cost a failing request and a
+ * politeness delay, which turned one ingest run into seven minutes for nothing.
+ */
 
 function hostOf(rawUrl: string): string | null {
   try {
