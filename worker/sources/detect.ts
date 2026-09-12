@@ -17,7 +17,11 @@
  *   ashby       {jobs:[]}                      Ramp 145, Notion 127, Vanta 105
  *   workable    {name, description, jobs:[]}   doist 200 with 0 open
  *   breezy      bare array                     breezy 3
- *   recruitee   {offers:[]}                    UNVERIFIED — no live board found
+ *   recruitee   {offers:[]}                    timedoctor 4, multiplier 1
+ *
+ * All six confirmed against live boards. Recruitee took two attempts: the first
+ * three tokens tried were 404s, which looked like a wrong response shape and was
+ * really just three wrong guesses.
  */
 
 import type { AtsVendor } from './watchlist.js';
