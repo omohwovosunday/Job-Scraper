@@ -9,16 +9,16 @@ Vercel.
 
 ## Status
 
-Under construction, in build order. Currently at step 3 of 10.
+Under construction, in build order. Currently at step 6 of 10.
 
 | Step | | |
 |---|---|---|
 | 1 | Repo, gitignore, TypeScript scaffold | done |
 | 2 | Supabase schema, knowledge seeding | done |
-| 3 | Ingest: RemoteOK, with dedupe verified | code done, DB check pending |
-| 4 | Ingest: Greenhouse company boards | code done, DB check pending |
+| 3 | Ingest: RemoteOK, with dedupe verified | done |
+| 4 | Ingest: Greenhouse company boards | done |
 | 5 | Apply-path resolver and classification | done |
-| 6 | Scorer, dry run — **review gate** | next |
+| 6 | Scorer, dry run — **review gate** | code done, needs API key |
 | 7 | Drafter, dry run — **review gate** | |
 | 8 | Dashboard: queue, sent log, kill switch | |
 | 9 | First live sends — **review gate** | |
@@ -67,9 +67,10 @@ npm run typecheck
   `knowledge` table and are fetched at run time.
 - Rate floors and the score threshold are read from the environment with no
   committed defaults. The worker fails at startup if they are unset.
-- Row-level security is enabled and forced on every table with no permissive
-  policies, so the anon key grants nothing. The worker uses the service role key;
-  the dashboard queries server-side with it. Never expose it to a browser bundle.
+- Row-level security is enabled on every table with no permissive policies, so the
+  anon key grants nothing. The worker uses the service role key, which bypasses
+  RLS; the dashboard queries server-side with it. Never expose it to a browser
+  bundle.
 - Secrets live in GitHub Actions secrets and Vercel env vars. Never committed.
 
 ## Sourcing, and what the first measurement showed
@@ -117,6 +118,39 @@ one-click assist — copy the letter, open the apply URL — carrying the last s
 under ten seconds. Two things would change that: aggregators that surface smaller
 companies who accept applications by email, and the outreach track, which is email
 by construction and therefore automatable end to end.
+
+## The pre-filter, and why it exists
+
+Nothing reaches the model until the cheap checks have run. Over the 1,392 rows
+currently held:
+
+| | Rows |
+|---|---|
+| No design signal in the title | 786 |
+| Region excluded by the employer's own location field | 487 |
+| Hybrid or onsite by the location field | 82 |
+| **Reach the scorer** | **37** |
+
+Four API calls instead of 140. Spending a model call to rediscover that "Remote -
+United States" excludes a Lagos applicant is spending money to read a field the
+employer already filled in.
+
+The bar for excluding something here is deliberately high, because a pre-filter
+mistake is invisible — the row is marked skipped and nobody looks at it again. So
+it acts only on explicit statements, and everything ambiguous goes through to the
+scorer, which has `region_ambiguous` for exactly that. An empty location field
+always passes. So does a bare city name: "Toronto" does imply Canada, but a
+half-complete list of world cities would exclude the ones it knows and pass the
+rest, which is inconsistency with no upside.
+
+Audited against the live corpus for false exclusions — design-titled rows dropped
+as role mismatches, region exclusions on fields that also name an including region,
+onsite exclusions on remote-anywhere roles. All three came back zero.
+
+Descriptions are truncated head-and-tail rather than head-only. Eligibility lines
+sit at the *foot* of a long listing, after the benefits and the EEO boilerplate,
+and the longest description seen ran to 18,894 characters against a 4,000 budget.
+A head-only cut would discard the sentence that decides the hard zero.
 
 ## Email
 

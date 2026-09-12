@@ -17,7 +17,9 @@
     "process": "tsx worker/index.ts process",
     "outreach": "tsx worker/index.ts outreach",
     "followup": "tsx worker/index.ts followup",
-    "check:resolve": "tsx scripts/check-resolve.ts"
+    "check:resolve": "tsx scripts/check-resolve.ts",
+    "check:scorer": "tsx scripts/check-scorer.ts",
+    "score:report": "tsx scripts/score-report.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

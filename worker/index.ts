@@ -14,6 +14,8 @@
 import { runIngest } from './lib/ingest.js';
 import { runResolve } from './resolve/index.js';
 import { readSettings } from './lib/settings.js';
+import { assertCommercialEnv } from './llm/config.js';
+import { runScore } from './llm/scorer.js';
 import { SOURCES } from './sources/index.js';
 
 const STAGES = ['ingest', 'process', 'outreach', 'followup'] as const;
@@ -76,8 +78,21 @@ async function main(): Promise<void> {
       }
       break;
     }
-    case 'process':
-      notBuiltYet(stage, 'build order steps 5 to 7 (resolve, score, draft)');
+    case 'process': {
+      assertCommercialEnv();
+      const scored = await runScore();
+      console.log(
+        `score considered=${scored.considered} prefiltered=${scored.prefiltered} ` +
+          `scored=${scored.scored} passed=${scored.passed} skipped=${scored.skipped} ` +
+          `failed=${scored.failed} apiCalls=${scored.apiCalls}`,
+      );
+      const reasons = Object.entries(scored.prefilterReasons)
+        .sort((a, b) => b[1] - a[1])
+        .map(([flag, n]) => `${flag}=${n}`)
+        .join(' ');
+      if (reasons !== '') console.log(`prefilter ${reasons}`);
+      notBuiltYet(stage, 'the drafter is build order step 7');
+    }
     case 'outreach':
       notBuiltYet(stage, 'build order step 10');
     case 'followup':
