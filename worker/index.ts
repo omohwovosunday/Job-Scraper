@@ -11,7 +11,9 @@
  * naming the step rather than failing obscurely.
  */
 
+import { runIngest } from './lib/ingest.js';
 import { readSettings } from './lib/settings.js';
+import { SOURCES } from './sources/index.js';
 
 const STAGES = ['ingest', 'process', 'outreach', 'followup'] as const;
 type Stage = (typeof STAGES)[number];
@@ -47,8 +49,17 @@ async function main(): Promise<void> {
   );
 
   switch (stage) {
-    case 'ingest':
-      notBuiltYet(stage, 'build order step 3 (RemoteOK) and step 4 (Greenhouse board)');
+    case 'ingest': {
+      const result = await runIngest(SOURCES);
+      console.log(`ingest total new=${result.totalInserted}`);
+      const failed = result.perSource.filter((s) => s.error !== undefined);
+      // A failing board is reported but does not fail the run; the next cron
+      // retries it, and the other sources already did their work.
+      if (failed.length === result.perSource.length && failed.length > 0) {
+        throw new Error('every source failed');
+      }
+      break;
+    }
     case 'process':
       notBuiltYet(stage, 'build order steps 5 to 7 (resolve, score, draft)');
     case 'outreach':

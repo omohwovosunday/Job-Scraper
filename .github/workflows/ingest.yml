@@ -1,0 +1,46 @@
+name: ingest
+
+# Polls the sources, dedupes, inserts what is new. Reads feeds and writes rows.
+# It never sends anything, so it is safe to leave on the schedule from day one.
+#
+# Cron on GitHub Actions fires late under load and runs get cancelled. The stage is
+# idempotent — its only write is an insert that does nothing on a dedupe_hash
+# conflict — so a missed or half-finished run needs no repair.
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Two overlapping runs would do the same work twice and race on the same rows.
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run ingest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Ingest does not score, but config.ts is imported along the way and
+          # asserts these when a stage actually needs them. Supplied so a future
+          # scoring step in this workflow fails on data, not on configuration.
+          RATE_FLOOR_HOURLY_USD: ${{ secrets.RATE_FLOOR_HOURLY_USD }}
+          RATE_FLOOR_MONTHLY_USD: ${{ secrets.RATE_FLOOR_MONTHLY_USD }}
+          SCORE_THRESHOLD: ${{ secrets.SCORE_THRESHOLD }}

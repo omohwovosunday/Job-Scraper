@@ -8,6 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "seed:knowledge": "tsx scripts/seed-knowledge.ts",
+    "check:ingest": "tsx scripts/check-ingest.ts",
+    "verify:dedupe": "tsx scripts/verify-dedupe.ts",
     "ingest": "tsx worker/index.ts ingest",
     "process": "tsx worker/index.ts process",
     "outreach": "tsx worker/index.ts outreach",

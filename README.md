@@ -9,14 +9,14 @@ Vercel.
 
 ## Status
 
-Under construction, in build order. Currently at step 2 of 10.
+Under construction, in build order. Currently at step 3 of 10.
 
 | Step | | |
 |---|---|---|
 | 1 | Repo, gitignore, TypeScript scaffold | done |
 | 2 | Supabase schema, knowledge seeding | done |
-| 3 | Ingest: RemoteOK, with dedupe verified | next |
-| 4 | Ingest: one Greenhouse board from the watchlist | |
+| 3 | Ingest: RemoteOK, with dedupe verified | code done, DB check pending |
+| 4 | Ingest: one Greenhouse board from the watchlist | next |
 | 5 | Apply-path resolver and classification | |
 | 6 | Scorer, dry run — **review gate** | |
 | 7 | Drafter, dry run — **review gate** | |
