@@ -19,6 +19,7 @@ import { assertCommercialEnv } from './llm/config.js';
 import { runDraft } from './llm/drafter.js';
 import { runScore } from './llm/scorer.js';
 import { runResolve } from './resolve/index.js';
+import { runSend } from './submit/index.js';
 import { SOURCES } from './sources/index.js';
 
 const STAGES = ['ingest', 'process', 'outreach', 'followup'] as const;
@@ -96,13 +97,16 @@ async function processStage(): Promise<Record<string, unknown>> {
     .join(' ');
   if (downgrades !== '') console.log(`downgrades ${downgrades}`);
 
-  // Worth saying every run until step 9 exists. "drafted" reads like an outbox,
-  // and it is not one: nothing in this codebase can send.
-  console.log('Drafts are written. Sending is build order step 9 and is not built yet.');
-  // Namespaced, not spread together: both stats objects carry considered, failed
+  const sent = await runSend();
+  console.log(
+    `send eligible=${sent.eligible} sent=${sent.sent} skipped=${sent.skipped} ` +
+      `failed=${sent.failed} dry_run=${sent.dryRun} cap_remaining=${sent.capRemaining}`,
+  );
+
+  // Namespaced, not spread together: the stats objects share considered, failed
   // and apiCalls, so a flat merge would silently record the drafter's numbers as
   // the scorer's in run_log and the dashboard would report the wrong API spend.
-  return { score: { ...scored }, draft: { ...drafted } };
+  return { score: { ...scored }, draft: { ...drafted }, send: { ...sent } };
 }
 
 async function main(): Promise<void> {

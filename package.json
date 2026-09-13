@@ -27,7 +27,8 @@
     "measure:reddit": "tsx scripts/measure-reddit.ts",
     "score:smoke": "tsx scripts/score-smoke.ts",
     "check:drafter": "tsx scripts/check-drafter.ts",
-    "draft:smoke": "tsx scripts/draft-smoke.ts"
+    "draft:smoke": "tsx scripts/draft-smoke.ts",
+    "check:sender": "tsx scripts/check-sender.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
