@@ -1,11 +1,12 @@
-name: ingest
+name: process
 
-# Polls the sources, dedupes, inserts what is new. Reads feeds and writes rows.
-# It never sends anything, so it is safe to leave on the schedule from day one.
+# Scores whatever the ingest stage resolved, then (once step 7 lands) drafts.
 #
-# Cron on GitHub Actions fires late under load and runs get cancelled. The stage is
-# idempotent — its only write is an insert that does nothing on a dedupe_hash
-# conflict — so a missed or half-finished run needs no repair.
+# Offset half an hour from ingest so the two never contend for the same rows.
+# Nothing here sends: dry_run defaults true and there is no send path yet.
+#
+# Idempotent by status. Rows move resolved -> scored|skipped, so a cancelled run
+# leaves the remainder in 'resolved' and the next pass continues from there.
 
 on:
   # The schedule is deliberately commented out until the Actions secrets exist.
@@ -24,21 +25,21 @@ on:
   # found at 09:00 rather than 09:20 makes no difference to when a human applies.
   # Hourly also keeps a private repo comfortably inside the free Actions minutes.
   # schedule:
-  #   - cron: '0 * * * *'
+  #   - cron: '30 * * * *'
   workflow_dispatch:
 
 concurrency:
   # Two overlapping runs would do the same work twice and race on the same rows.
-  group: ingest
+  group: process
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  ingest:
+  process:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -49,17 +50,21 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run ingest
+      - run: npm run process
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Ingest does not score, but config.ts is imported along the way and
-          # asserts these when a stage actually needs them. Supplied so a future
-          # scoring step in this workflow fails on data, not on configuration.
+          # The scoring provider. SCORER_PROVIDER selects which key is required;
+          # set only the one you are using. A missing key fails before any row is
+          # marked, rather than quarantining ten good rows per batch.
+          SCORER_PROVIDER: ${{ vars.SCORER_PROVIDER || 'gemini' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RATE_FLOOR_HOURLY_USD: ${{ secrets.RATE_FLOOR_HOURLY_USD }}
           RATE_FLOOR_MONTHLY_USD: ${{ secrets.RATE_FLOOR_MONTHLY_USD }}
+          RATE_FLOOR_JUNIOR_HOURLY_USD: ${{ secrets.RATE_FLOOR_JUNIOR_HOURLY_USD }}
           SCORE_THRESHOLD: ${{ secrets.SCORE_THRESHOLD }}
-          # So a failed run can alert rather than failing silently into the log.
+          # Alerts on failure go out over Gmail.
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
