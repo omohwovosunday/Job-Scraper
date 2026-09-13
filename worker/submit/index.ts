@@ -20,10 +20,26 @@
  * here is "send nothing and say why", never "send and hope".
  */
 
-import { db, selectAllRowsWhere } from '../lib/db.js';
+import { db, selectAllRows, selectAllRowsWhere } from '../lib/db.js';
 import { alerts, raiseAlert } from '../lib/alerts.js';
+import { normaliseCompany } from '../lib/dedupe.js';
 import { readSettings } from '../lib/settings.js';
 import { buildMessage, sendApplication, UnsendableError } from './email.js';
+
+/**
+ * Don't apply to the same company twice inside this window.
+ *
+ * dedupe_hash includes the posting date, so one company reposting a role, or
+ * running two openings with the same title, produces two rows that are genuinely
+ * distinct records and identical applications. Resend had exactly this on
+ * 2026-09-14: two Ashby listings, both "Product Designer", posted five weeks apart,
+ * whose drafts both opened with the same PayAfta paragraph.
+ *
+ * dedupe.ts has always said the fix belongs at the send gate rather than in the
+ * hash, because the hash is right to treat them as different listings and the
+ * recipient is what makes it wrong to mail both.
+ */
+const COMPANY_COOLDOWN_DAYS = 30;
 
 type Sendable = {
   id: string;
@@ -64,6 +80,28 @@ export async function sentToday(): Promise<number> {
     .gte('sent_at', since.toISOString());
   if (error) throw new Error(`Could not count today's sends: ${error.message}`);
   return count ?? 0;
+}
+
+/**
+ * Companies already applied to inside the cooldown, normalised for comparison.
+ *
+ * Read from opportunities rather than sent_log because sent_log stores the address
+ * and not the employer, and two Recruitee mailboxes at one company differ per job.
+ */
+export async function recentlyAppliedCompanies(days = COMPANY_COOLDOWN_DAYS): Promise<Set<string>> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await selectAllRows<{ company: string | null; sent_at: string | null }>(
+    'opportunities',
+    'company, sent_at',
+  );
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (row.sent_at === null) continue;
+    if (new Date(row.sent_at) < since) continue;
+    const key = normaliseCompany(row.company);
+    if (key !== '') seen.add(key);
+  }
+  return seen;
 }
 
 export async function runSend(): Promise<SenderStats> {
@@ -119,9 +157,26 @@ export async function runSend(): Promise<SenderStats> {
     return stats;
   }
 
+  // Gate 6. Built from the database before the loop, then added to as sends happen,
+  // so two rows for the same company inside one run cannot both go out.
+  const applied = await recentlyAppliedCompanies();
+
   for (const row of eligible) {
     if (stats.sent >= capRemaining) {
       stats.skipped += 1;
+      continue;
+    }
+
+    const companyKey = normaliseCompany(row.company);
+    if (companyKey !== '' && applied.has(companyKey)) {
+      await db().from('opportunities')
+        .update({
+          tier: 'manual',
+          error: `already applied to ${row.company} in the last ${COMPANY_COOLDOWN_DAYS} days`,
+        })
+        .eq('id', row.id);
+      stats.skipped += 1;
+      console.log(`  HELD ${row.company} — already applied inside the cooldown`);
       continue;
     }
 
@@ -161,6 +216,7 @@ export async function runSend(): Promise<SenderStats> {
         .eq('id', row.id);
 
       stats.sent += 1;
+      if (companyKey !== '') applied.add(companyKey);
       console.log(`  SENT ${row.company} — ${row.title} -> ${message.to}`);
     } catch (err: unknown) {
       const why = err instanceof Error ? err.message : String(err);

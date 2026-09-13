@@ -131,6 +131,13 @@ function gateOrdering(): void {
     /from\('sent_log'\)/.test(source) && /sentToday/.test(source));
   check('sent_log is written before the status flips',
     source.indexOf("from('sent_log').insert") < source.indexOf("status: 'sent'"));
+
+  // dedupe_hash includes the posting date, so one company with two openings at the
+  // same title is two legitimate rows and one employer. Resend had exactly that.
+  check('the same company is not applied to twice inside a cooldown',
+    /COMPANY_COOLDOWN_DAYS/.test(source) && /applied\.has\(companyKey\)/.test(source));
+  check('a company sent to during the run is added to the held set',
+    /applied\.add\(companyKey\)/.test(source));
 }
 
 async function main(): Promise<void> {
