@@ -37,6 +37,19 @@ eight seconds and judge immediately.
 
 Match this. Not a performance of it — just don't write in a register he wouldn't use.
 
+## The resume attached to this letter
+
+{{RESUME_CLAIMS}}
+
+The reader has this in front of them alongside your letter. Do not contradict it.
+
+Being honest about a gap is right and the voice calls for it, but the gap has to be
+one the resume does not already claim to fill. "I haven't built a token
+architecture" next to a resume listing design tokens does not read as candour, it
+reads as one of the two documents being false. If the listing wants something the
+resume covers, the letter's job is to show the depth of it, not to disown it. Name
+a genuine gap instead, or none.
+
 ## The job
 
 {{TITLE}} at {{COMPANY}}

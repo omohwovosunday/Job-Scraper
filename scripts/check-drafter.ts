@@ -20,7 +20,7 @@ import {
   validateDraft,
   type Draft,
 } from '../worker/llm/drafter.js';
-import { DRAFTER_CONFIG, SCORING_CONFIG } from '../worker/llm/config.js';
+import { DRAFTER_CONFIG, RESUME_CLAIMS, RESUME_VARIANTS, SCORING_CONFIG } from '../worker/llm/config.js';
 import { loadSystemPromptTemplate, interpolate } from '../worker/llm/scorer.js';
 
 const failures: string[] = [];
@@ -179,7 +179,7 @@ async function prompt(): Promise<void> {
 
   const placeholders = [...new Set([...template.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]))];
   const supplied = ['PROFILE_MD', 'FULL_TEXT_OF_SELECTED_CASE_STUDY', 'VOICE_SAMPLE',
-    'TITLE', 'COMPANY', 'DESCRIPTION', 'FORMAT', 'MAX_WORDS'];
+    'RESUME_CLAIMS', 'TITLE', 'COMPANY', 'DESCRIPTION', 'FORMAT', 'MAX_WORDS'];
   const unsupplied = placeholders.filter((p) => p !== undefined && !supplied.includes(p));
   check(`every placeholder is supplied by the stage (${placeholders.length} found)`,
     unsupplied.length === 0, unsupplied.join(', '));
@@ -195,7 +195,17 @@ async function prompt(): Promise<void> {
   check('a missing placeholder throws instead of shipping literal braces', threw);
 
   check('the prompt still forbids em-dash asides',
-    /Em-dash asides/i.test(await loadSystemPromptTemplate('worker/llm/drafter.prompt.md')));
+    /Em-dash asides/i.test(template));
+
+  // A letter that disclaims what its own attachment claims reads as one of the two
+  // being false. The drafter could not see the resume until RESUME_CLAIMS existed.
+  check('the prompt tells the drafter what the attached resume claims',
+    template.includes('{{RESUME_CLAIMS}}') && /[Dd]o not contradict it/.test(template));
+  check('every resume variant has claims text',
+    RESUME_VARIANTS.every((v) => (RESUME_CLAIMS[v] ?? '').length > 100));
+  check('the design-engineer claims mention tokens and design systems',
+    /design tokens/i.test(RESUME_CLAIMS['design-engineer'])
+      && /design systems/i.test(RESUME_CLAIMS['design-engineer']));
 }
 
 async function main(): Promise<void> {

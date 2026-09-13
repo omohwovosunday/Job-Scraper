@@ -172,6 +172,41 @@ export type DraftFormat = keyof typeof DRAFTER_CONFIG.maxWords;
 export const DRAFT_FORMATS = Object.keys(DRAFTER_CONFIG.maxWords) as DraftFormat[];
 
 /**
+ * What each resume asserts, for the drafter to stay consistent with.
+ *
+ * The drafter reads the profile, the case study and the voice sample. It never saw
+ * the resume, which is why a letter could disclaim something the attachment claims:
+ * the Vanta draft of 2026-09-14 said "my systems work has lived inside a single
+ * spec, not across teams" while the PDF stapled to it said "built and maintained
+ * design systems used across multiple portfolio products". Both are defensible
+ * alone. A recruiter reads them together.
+ *
+ * Kept as text here rather than parsed from the PDFs at run time: a GitHub Actions
+ * run has no pdftotext, and these strings change only when build-resumes.mjs does.
+ * If you edit the resumes, edit these.
+ */
+export const RESUME_CLAIMS: Record<ResumeVariant, string> = {
+  'product-design':
+    'Sole designer across a venture studio portfolio, covering discovery, user flows, ' +
+    'information architecture, high-fidelity UI and developer handoff. Built and maintained ' +
+    'design systems used across multiple portfolio products. Specialisms: PRD authoring, ' +
+    'flow-gap auditing, state and edge-case modelling, UX copy. Tools: Figma, Claude Design, ' +
+    'Canva, GitHub, Vercel.',
+  'design-engineer':
+    'Owns the full path from specification to production: PRD, prototype, implementation, ' +
+    'deployment via GitHub and Vercel. Sole designer across a venture studio portfolio; built ' +
+    'the design systems that front-end teams implemented against. Produced developer handoff ' +
+    'specifications covering tokens, component props, interaction states and responsive ' +
+    'behaviour. Skills named: design systems, design tokens, component libraries, front-end ' +
+    'implementation, responsive systems.',
+  'ai-training':
+    'Specialism in written specification: PRDs, flow documentation, state modelling and ' +
+    'edge-case analysis. Authors 13-module, ~45-screen UX specs with per-screen purpose, ' +
+    'layout, states and actions. Audits existing PRDs for logic gaps, dead-end states and ' +
+    'internal contradictions, then rewrites them. Models complex state machines.',
+};
+
+/**
  * gettranzport and agta are dropped as of 2026-09-12 — their Problem / What I did /
  * Hard part sections were never completed, and the drafter must not select a case
  * study it cannot quote from. Re-adding one is this line plus a knowledge table row.

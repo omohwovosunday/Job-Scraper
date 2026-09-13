@@ -32,9 +32,12 @@ import { getKnowledge, caseStudyKey } from '../lib/knowledge.js';
 import {
   CASE_STUDIES,
   DRAFTER_CONFIG,
+  RESUME_CLAIMS,
+  RESUME_VARIANTS,
   SCORING_CONFIG,
   type CaseStudy,
   type DraftFormat,
+  type ResumeVariant,
 } from './config.js';
 import { interpolate, loadSystemPromptTemplate } from './scorer.js';
 import { draftingModel } from './provider.js';
@@ -51,6 +54,7 @@ type Candidate = {
   apply_method: string | null;
   score: number | null;
   case_study_used: string | null;
+  resume_variant: string | null;
 };
 
 export type Tier = 'auto' | 'auto_flagged' | 'manual';
@@ -190,10 +194,18 @@ export async function buildSystemPrompt(
     getKnowledge(caseStudyKey(caseStudy)),
   ]);
 
+  // Which PDF the sender will staple to this letter. The drafter used to have no
+  // idea, which is how a letter came to disclaim something its own attachment
+  // claimed. Falls back to the sender's default so the two always agree.
+  const variant = (RESUME_VARIANTS as readonly string[]).includes(row.resume_variant ?? '')
+    ? (row.resume_variant as ResumeVariant)
+    : 'product-design';
+
   const system = interpolate(template, {
     PROFILE_MD: profile,
     FULL_TEXT_OF_SELECTED_CASE_STUDY: study,
     VOICE_SAMPLE: voice,
+    RESUME_CLAIMS: RESUME_CLAIMS[variant],
     TITLE: row.title,
     COMPANY: row.company ?? 'the company',
     DESCRIPTION: row.description ?? '(no description was published)',
@@ -318,7 +330,7 @@ export function tierFor(
 export async function runDraft(limit?: number): Promise<DrafterStats> {
   const rows = await selectAllRowsWhere<Candidate>(
     'opportunities',
-    'id, title, company, description, location, apply_method, score, case_study_used',
+    'id, title, company, description, location, apply_method, score, case_study_used, resume_variant',
     'status',
     'scored',
   );
