@@ -9,7 +9,7 @@ Vercel.
 
 ## Status
 
-Under construction, in build order. Currently at step 6 of 10.
+Every stage is built. Nothing has been sent, and two review gates are unanswered.
 
 | Step | | |
 |---|---|---|
@@ -18,18 +18,25 @@ Under construction, in build order. Currently at step 6 of 10.
 | 3 | Ingest: RemoteOK, with dedupe verified | done |
 | 4 | Ingest: Greenhouse company boards | done |
 | 5 | Apply-path resolver and classification | done |
-| 6 | Scorer, dry run — **review gate** | code done, needs API key |
-| 7 | Drafter, dry run — **review gate** | |
-| 8 | Dashboard: queue, sent log, kill switch | built, never seen a scored row |
-| 9 | First live sends — **review gate** | |
-| 10 | Remaining sources, follow-ups, metrics | 7 sources; Recruitee opened the email path |
+| 6 | Scorer, dry run — **review gate** | run: 95 scored, 11 passed · gate open |
+| 7 | Drafter, dry run — **review gate** | run: 6 drafts written · gate open |
+| 8 | Dashboard: queue, sent log, kill switch | done, verified against real rows |
+| 9 | First live sends — **review gate** | built, never exercised |
+| 10 | Remaining sources, follow-ups, metrics | 7 sources; outreach and followup unbuilt |
 
-Step 8 is built but cannot be called done: the queue, the reply-rate breakdowns and
-the median-time-to-apply all read tables the scorer has never written to, so every
-panel has so far been exercised against zeros. Its first real test is step 6.
+"Built" and "done" are not the same thing here, and the gap is the point. The
+scorer, drafter and sender all run; what has not happened is a human reading the
+output and saying it is good enough to send. Steps 6 and 7 each require that, and
+step 9 cannot be exercised until they are answered.
 
-Nothing sends. `dry_run` defaults to true and `kill_switch` is checked at the top of
-every stage.
+Nothing sends, by four separate mechanisms. `dry_run` is true, `kill_switch` is
+checked at the top of every stage, only `tier = 'auto'` is ever sent by machine and
+no row currently holds it, and the daily cap is counted from `sent_log` so a crash
+cannot reset it. `worker/submit/` is the only code here that acts irreversibly on
+the outside world; `npm run check:sender` asserts the gate ordering against the
+source rather than trusting the comments.
+
+Both cron schedules are commented out. Actions secrets are not set.
 
 ## Layout
 
