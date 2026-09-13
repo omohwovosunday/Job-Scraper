@@ -155,18 +155,29 @@ answers are the ones most likely to embarrass you.
 
 ---
 
-## `knowledge/voice-sample.md` — present, but a substitute
+## `knowledge/voice-sample.md` — real writing, with one internal contradiction
 
-The file exists and the prompt reads it, but it is a style specification rather than
-a sample of real writing, and it says so at the top. To upgrade it, put 300–500
-words of your own unedited writing in it — a real email to a client, a Slack
-message explaining a design decision, a section of one of your PRDs. Not something
-you polished for the occasion.
+Replaced on 2026-09-13. It is no longer a style specification: it carries seven
+worked samples (cover letter, cold outreach, two form answers, a follow-up, a
+rejection reply, a profile blurb), a fact bank, and the author's own rules. Prefer
+the samples over any paraphrase of them — imitate the sentence shapes directly.
 
-Until then the drafter is working from a floor, not a voice. Generic business
-English is the exact register every other applicant is using. The voice sample is
-cheap, and it is the difference between an application that reads as written and
-one that reads as generated.
+**Two constraints that are not optional.**
+
+The fact bank is a closed world. Its rule 7 — stop and flag rather than guess, and
+never leave a bracket in the output — governs this stage. Four of the products it
+authorises naming (Procurly, GetTranzport, KSolar, AGTA) have no case study, so
+they can be named but nothing beyond the one-line description in the bank can be
+said about them. GetTranzport and AGTA are the two whose case studies were dropped
+for being incomplete; do not reconstruct them from the product name.
+
+The file's stated punctuation rule forbids em-dashes, and so does the Never list
+above. Its own samples use them anyway, in five places out of seven. The rule is
+what the author asked for and the demonstrations are an artefact of how the file
+was written, so the rule wins: no em-dash asides, full stop instead. This is worth
+stating twice because example beats instruction by default, and em-dash density is
+one of the clearest surface tells of generated prose — which is the thing the whole
+stage exists to avoid.
 
 ---
 
