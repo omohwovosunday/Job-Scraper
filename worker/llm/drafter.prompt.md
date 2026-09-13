@@ -127,7 +127,12 @@ Return JSON only. No fences, no prose.
 
 {
   "subject": "string — for email format only, else null. Specific, not 'Application
-              for Product Designer'. Name the role and one concrete hook.",
+              for Product Designer'. Name the role and one concrete hook, joined
+              with a COLON. Never a dash of any kind: an em-dash here is rejected
+              and the role title often already contains hyphens, so a dash reads as
+              part of the title. 'Senior Product Designer, Mobile: the RentOS
+              dashboard problem', not 'Senior Product Designer - Mobile — the
+              RentOS dashboard problem'.",
   "body": "string — the application text",
   "word_count": integer,
   "confidence": 0.0-1.0,
