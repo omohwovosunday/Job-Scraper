@@ -144,3 +144,7 @@ button.primary:hover { opacity: 0.86; border-color: var(--ink); }
   .bar-value { width: 76px; }
   .queue-actions { width: 100%; }
 }
+
+/* The one apply path that needs no human. Green rather than neutral because it
+   marks capability, not a warning like the red-flag pills beside it. */
+.pill-email { color: var(--ok); border-color: var(--ok); }

@@ -72,8 +72,13 @@ export function QueueRow(p: Props) {
           {p.location !== null && <> · {p.location}</>}
         </div>
         {p.reason !== null && <div className="muted queue-reason">{p.reason}</div>}
-        {p.flags.length > 0 && (
+        {(p.applyMethod === 'email' || p.flags.length > 0) && (
           <div className="queue-flags">
+            {/* The only apply path a machine can use, so it is the one worth
+                calling out. Every other row resolves to an ATS endpoint or a form
+                behind a key the employer holds. applyMethod was a declared prop
+                that nothing rendered until the first email row existed. */}
+            {p.applyMethod === 'email' && <span className="pill pill-email">email</span>}
             {p.flags.map((f) => (
               <span className="pill" key={f}>
                 {f}

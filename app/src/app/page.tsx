@@ -167,10 +167,11 @@ export default async function Page() {
           </span>
         </div>
         <p className="section-note">
-          Every listing here has to be submitted by hand. Applicant tracking systems gate their
+          Most listings here have to be submitted by hand. Applicant tracking systems gate their
           application endpoints behind a key only the employer holds, and the job boards hide the
-          outbound apply link, so nothing can be sent automatically. Copy puts the draft on your
-          clipboard and opens the listing.
+          outbound apply link. Copy puts the draft on your clipboard and opens the listing. Rows
+          marked <span className="pill">email</span> are the exception: Recruitee publishes a
+          per-job address, so those can be sent without you.
         </p>
 
         {queue.length === 0 ? (

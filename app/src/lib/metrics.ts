@@ -191,6 +191,10 @@ export async function health(): Promise<Health> {
   const lastRun: Record<string, RunRow | undefined> = {};
   for (const r of recent) lastRun[r.stage] ??= r;
 
+  // `recent` is newest-first, so the first ok run per stage is its latest success.
+  const lastSuccess: Record<string, RunRow | undefined> = {};
+  for (const r of recent) if (r.ok !== false) lastSuccess[r.stage] ??= r;
+
   const EXPECTED_INTERVAL_MINUTES: Record<string, number> = { ingest: 120, process: 120 };
   const staleStages: string[] = [];
   for (const [stage, maxAge] of Object.entries(EXPECTED_INTERVAL_MINUTES)) {
@@ -215,7 +219,18 @@ export async function health(): Promise<Health> {
   return {
     lastRun,
     staleStages,
-    recentFailures: recent.filter((r) => r.ok === false).slice(0, 10),
+    // Only failures a later run has NOT already superseded. Filtering the whole
+    // window on ok === false reports a fault that is fixed: the Gemini quota
+    // failures of 2026-09-13 kept the band reading "process is failing" for hours
+    // after two Anthropic runs had succeeded. A monitor that cries wolf about
+    // resolved faults is worse than none, because it teaches you to ignore it.
+    recentFailures: recent
+      .filter((r) => {
+        if (r.ok !== false) return false;
+        const lastOk = lastSuccess[r.stage];
+        return lastOk === undefined || new Date(r.started_at) > new Date(lastOk.started_at);
+      })
+      .slice(0, 10),
     openAlerts: allAlerts.filter((a) => a.delivered).slice(0, 10),
     suppressedCount: allAlerts.filter((a) => !a.delivered).length,
   };
