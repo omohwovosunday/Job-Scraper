@@ -20,9 +20,13 @@ Under construction, in build order. Currently at step 6 of 10.
 | 5 | Apply-path resolver and classification | done |
 | 6 | Scorer, dry run — **review gate** | code done, needs API key |
 | 7 | Drafter, dry run — **review gate** | |
-| 8 | Dashboard: queue, sent log, kill switch | |
+| 8 | Dashboard: queue, sent log, kill switch | built, never seen a scored row |
 | 9 | First live sends — **review gate** | |
-| 10 | Remaining sources, follow-ups, metrics | |
+| 10 | Remaining sources, follow-ups, metrics | 7 sources; Recruitee opened the email path |
+
+Step 8 is built but cannot be called done: the queue, the reply-rate breakdowns and
+the median-time-to-apply all read tables the scorer has never written to, so every
+panel has so far been exercised against zeros. Its first real test is step 6.
 
 Nothing sends. `dry_run` defaults to true and `kill_switch` is checked at the top of
 every stage.
