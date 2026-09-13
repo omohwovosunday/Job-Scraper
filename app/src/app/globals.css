@@ -58,3 +58,89 @@ tr:last-child td { border-bottom: 0; }
 button { font: inherit; padding: 7px 13px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
 button:hover { border-color: var(--accent); }
 .empty { color: var(--muted); padding: 10px 0; }
+
+/* ── Status band ─────────────────────────────────────────────────────
+   Colour appears only when state demands it: a healthy pipeline is a
+   quiet page, so a red rule actually means something. */
+.band { border-top: 2px solid var(--line); padding-top: 14px; margin-bottom: 26px; }
+.band-live { border-top-color: var(--ok); }
+.band-fault { border-top-color: var(--err); }
+.band-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.band-title { font-size: 17px; font-weight: 600; }
+.band-note { margin: 10px 0 0; font-size: 13px; }
+.fault {
+  margin-top: 12px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--err); border-radius: 6px;
+}
+.fault-msg { font-size: 14px; margin-bottom: 4px; }
+.fault .muted { font-size: 12.5px; }
+
+/* ── Today ── */
+.today {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 28px;
+}
+.stats-row { display: flex; gap: 28px; flex-wrap: wrap; margin: 4px 0 22px; }
+.stat-block { flex: 1 1 0; min-width: 86px; }
+.stat-block .stat { font-size: 30px; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat-block .stat-label { margin-top: 6px; text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+section { margin-bottom: 40px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.section-head h2 { margin: 0; }
+h2 { font-size: 17px; font-weight: 600; text-transform: none; letter-spacing: -0.01em; color: var(--ink); margin: 0 0 6px; }
+.section-note { font-size: 13px; color: var(--muted); margin: 0 0 16px; max-width: 72ch; }
+.empty-panel {
+  padding: 24px 0; border-top: 1px solid var(--line);
+  font-size: 14px; color: var(--muted);
+}
+
+/* ── Queue ── */
+.queue-row {
+  border-top: 1px solid var(--line); padding: 14px 0;
+  display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap;
+}
+.queue-score { width: 30px; flex-shrink: 0; font-size: 15px; font-weight: 600; padding-top: 1px; }
+.queue-body { flex: 1 1 240px; min-width: 0; }
+.queue-title { font-size: 15px; font-weight: 500; }
+.queue-meta { font-size: 12.5px; margin-top: 3px; }
+.queue-reason { font-size: 12.5px; margin-top: 4px; }
+.queue-flags { margin-top: 5px; display: flex; gap: 4px; flex-wrap: wrap; }
+.queue-status { font-size: 12.5px; margin-top: 6px; }
+.queue-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+button.primary:hover { opacity: 0.86; border-color: var(--ink); }
+.button-link {
+  font-size: 13px; padding: 7px 12px; border: 1px solid var(--line);
+  border-radius: 7px; color: var(--muted); text-decoration: none;
+}
+.button-link:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Sent log ── */
+.log-row {
+  border-top: 1px solid var(--line-soft, var(--line)); padding: 11px 0;
+  display: flex; gap: 12px; align-items: baseline;
+}
+.log-when { width: 76px; flex-shrink: 0; font-size: 12.5px; }
+.log-what { flex: 1; min-width: 0; font-size: 14px; }
+
+/* ── Ledger bars, drawn to a real scale ── */
+.breakdown { margin-bottom: 24px; }
+.breakdown-title { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.bar-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.bar-label { width: 108px; flex-shrink: 0; font-size: 13px; }
+.bar-track { flex: 1; height: 8px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.bar-value {
+  width: 96px; text-align: right; flex-shrink: 0;
+  font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .bar-label { width: 78px; }
+  .bar-value { width: 76px; }
+  .queue-actions { width: 100%; }
+}

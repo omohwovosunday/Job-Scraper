@@ -4,12 +4,13 @@
  * The operations dashboard. Server component — every query runs with the service
  * role, which must never reach a browser.
  *
- * Ordered by what you need to know first when you open it: is anything broken,
- * then what is the pipeline doing, then the analytics that let you tune it.
+ * Ordered by what the day actually needs: what is broken, what happened today,
+ * what is waiting on you, what went out, and only then the analytics. The
+ * analytics are weekly reading; the queue is the daily job, so it comes first.
  */
 
 import {
-  daily,
+  faultConsequence,
   flagsOf,
   health,
   loadOpportunities,
@@ -18,12 +19,13 @@ import {
   replyRateByCaseStudy,
   replyRateByScoreBand,
   replyRateBySource,
+  today as todayCounts,
   type Opportunity,
   type Rate,
 } from '@/lib/metrics';
-import { KillSwitch } from './kill-switch';
+import { Controls } from './controls';
+import { QueueRow } from './queue-row';
 
-// Live operational data. Never cache, never prerender.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -35,37 +37,53 @@ function ago(iso: string | null | undefined): string {
   if (!iso) return 'never';
   const mins = (Date.now() - new Date(iso).getTime()) / 60_000;
   if (mins < 1) return 'just now';
-  if (mins < 60) return `${Math.round(mins)}m ago`;
+  if (mins < 60) return `${Math.round(mins)} min ago`;
   if (mins < 48 * 60) return `${Math.round(mins / 60)}h ago`;
   return `${Math.round(mins / 1440)}d ago`;
 }
 
-function RateTable({ title, rows, note }: { title: string; rows: Rate[]; note: string }) {
+function Stat({ value, label, tone }: { value: string | number; label: string; tone?: 'good' | 'bad' }) {
+  return (
+    <div className="stat-block">
+      <div className={`stat ${tone === 'good' ? 'ok' : tone === 'bad' ? 'err' : ''}`}>{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  );
+}
+
+/**
+ * A ruled bar, drawn to a real scale. The reference is the highest reply rate on
+ * the chart, and every row states its own figure — so a bar's length means
+ * something relative to the others rather than to an arbitrary multiplier.
+ */
+function Bars({ rows }: { rows: Rate[] }) {
+  const withData = rows.filter((r) => r.sent > 0);
+  if (withData.length === 0) return null;
+  const peak = Math.max(...withData.map((r) => r.rate ?? 0), 0.0001);
+
+  return (
+    <div className="bars">
+      {rows.map((r) => (
+        <div className="bar-row" key={r.label}>
+          <div className="bar-label">{r.label}</div>
+          <div className="bar-track">
+            <div className="bar-fill" style={{ width: `${((r.rate ?? 0) / peak) * 100}%` }} />
+          </div>
+          <div className="bar-value">
+            {r.sent === 0 ? <span className="muted">none sent</span> : `${pct(r.rate)} of ${r.sent}`}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Breakdown({ title, note, rows }: { title: string; note: string; rows: Rate[] }) {
   const anySent = rows.some((r) => r.sent > 0);
   return (
-    <div className="panel">
-      <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {!anySent ? (
-        <p className="empty">
-          Nothing sent yet. {note}
-        </p>
-      ) : (
-        <table>
-          <thead>
-            <tr><th>{title.split(' by ')[1] ?? ''}</th><th className="num">sent</th><th className="num">replied</th><th className="num">rate</th></tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.label}>
-                <td>{r.label}</td>
-                <td className="num">{r.sent}</td>
-                <td className="num">{r.replied}</td>
-                <td className="num">{pct(r.rate)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div className="breakdown">
+      <div className="breakdown-title">{title}</div>
+      {anySent ? <Bars rows={rows} /> : <p className="empty">{note}</p>}
     </div>
   );
 }
@@ -73,234 +91,204 @@ function RateTable({ title, rows, note }: { title: string; rows: Rate[]; note: s
 export default async function Page() {
   const [rows, settings, h] = await Promise.all([loadOpportunities(), loadSettings(), health()]);
 
-  const byStatus = new Map<string, number>();
-  for (const r of rows) byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1);
-
-  const sent = rows.filter((r) => r.sent_at !== null);
-  const replied = rows.filter((r) => r.replied_at !== null);
-  const queue = rows.filter((r) => r.status === 'scored' || r.status === 'queued');
-  const days = daily(rows, 14);
-  const maxDay = Math.max(1, ...days.map((d) => Math.max(d.discovered, d.scored, d.sent)));
-  const median = medianHoursToApply(rows);
-
+  const capTotal = typeof settings['daily_send_cap'] === 'number' ? (settings['daily_send_cap'] as number) : 0;
+  const t = todayCounts(rows, capTotal);
   const dryRun = settings['dry_run'] === true;
   const killed = settings['kill_switch'] === true;
+
+  const queue = rows
+    .filter((r) => r.status === 'scored' || r.status === 'queued')
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const sentLog = rows
+    .filter((r) => r.sent_at !== null)
+    .sort((a, b) => new Date(b.sent_at as string).getTime() - new Date(a.sent_at as string).getTime())
+    .slice(0, 25);
+
+  const failing = h.recentFailures[0];
   const broken = h.staleStages.length > 0 || h.recentFailures.length > 0;
+  const median = medianHoursToApply(rows);
 
   return (
     <>
-      <h1>job-scraper</h1>
-      <p className="sub">
-        {rows.length.toLocaleString()} listings · {byStatus.get('skipped') ?? 0} filtered out ·{' '}
-        {queue.length} in the queue · {sent.length} applications sent
-      </p>
+      {/* Status band. Colour appears only when the state demands it. */}
+      <div className={`band ${broken ? 'band-fault' : 'band-live'}`}>
+        <div className="band-head">
+          <span className={`band-title ${broken ? 'err' : ''}`}>
+            {broken ? (failing ? `${failing.stage} is failing` : 'A stage has not run') : 'Pipeline running'}
+          </span>
+          <span className="muted">
+            ingest {ago(h.lastRun['ingest']?.started_at)} · process {ago(h.lastRun['process']?.started_at)}
+          </span>
+        </div>
 
-      {killed && (
-        <div className="banner err">
-          <strong>Kill switch is ON.</strong> Every stage exits immediately without doing anything.
-        </div>
-      )}
-      {broken ? (
-        <div className="banner err">
-          <strong>Something is wrong.</strong>{' '}
-          {h.staleStages.length > 0 && <>No recent run: {h.staleStages.join(', ')}. </>}
-          {h.recentFailures.length > 0 && <>{h.recentFailures.length} recent stage failure(s).</>}
-        </div>
-      ) : (
-        <div className="banner ok">
-          All stages have run recently and none failed.
-          {dryRun && ' Dry run is on, so nothing is being sent.'}
-        </div>
-      )}
+        {h.staleStages.length > 0 && (
+          <div className="fault">
+            <div className="fault-msg">No recent run: {h.staleStages.join(', ')}.</div>
+            <div className="muted">
+              A stage that never starts raises no error anywhere, so this is measured by the age of
+              the newest run rather than the outcome of the last one.
+            </div>
+          </div>
+        )}
 
-      <h2>Health</h2>
-      <div className="grid cols-2">
-        <div className="panel">
-          <table>
-            <thead><tr><th>stage</th><th>last run</th><th>outcome</th></tr></thead>
-            <tbody>
-              {['ingest', 'process', 'outreach', 'followup'].map((stage) => {
-                const last = h.lastRun[stage];
-                return (
-                  <tr key={stage}>
-                    <td>{stage}</td>
-                    <td className="muted">{ago(last?.started_at)}</td>
-                    <td className={last === undefined ? 'muted' : last.ok === false ? 'err' : last.ok ? 'ok' : 'warn'}>
-                      {last === undefined ? 'never run' : last.ok === false ? `failed: ${(last.error ?? '').slice(0, 60)}` : last.ok ? 'ok' : 'running'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="panel">
-          {h.openAlerts.length === 0 ? (
-            <p className="empty">No alerts raised.</p>
-          ) : (
-            <table>
-              <thead><tr><th>alert</th><th>when</th></tr></thead>
-              <tbody>
-                {h.openAlerts.map((a) => (
-                  <tr key={a.id}>
-                    <td>
-                      <span className={a.severity === 'error' ? 'err' : a.severity === 'warn' ? 'warn' : 'muted'}>
-                        {a.severity}
-                      </span>{' '}
-                      {a.subject}
-                      {a.suppressed_since_last > 0 && (
-                        <span className="muted"> (+{a.suppressed_since_last} suppressed)</span>
-                      )}
-                    </td>
-                    <td className="muted">{ago(a.sent_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {h.suppressedCount > 0 && (
-            <p className="muted" style={{ marginBottom: 0 }}>
-              {h.suppressedCount} occurrence(s) currently suppressed by the alert cooldown.
-            </p>
-          )}
-        </div>
+        {h.recentFailures.slice(0, 3).map((f) => (
+          <div className="fault" key={f.id}>
+            <div className="fault-msg">{f.error ?? 'failed with no message'}</div>
+            <div className="muted">
+              {f.stage}, {ago(f.started_at)}. {faultConsequence(f.stage)}
+            </div>
+          </div>
+        ))}
+
+        {(killed || dryRun) && (
+          <p className={killed ? 'err band-note' : 'band-note muted'}>
+            {killed
+              ? 'Kill switch on — every stage exits immediately without doing anything.'
+              : 'Dry run — drafts are written, nothing is sent.'}
+          </p>
+        )}
       </div>
 
-      <h2>Controls</h2>
-      <KillSwitch
-        killSwitch={killed}
-        dryRun={dryRun}
-        dailySendCap={typeof settings['daily_send_cap'] === 'number' ? (settings['daily_send_cap'] as number) : 0}
-        alertsEnabled={settings['alerts_enabled'] !== false}
-      />
+      {/* Today */}
+      <div className="today">
+        <Stat value={t.sent} label="sent today" />
+        <Stat value={t.replies} label="replies" tone={t.replies > 0 ? 'good' : undefined} />
+        <Stat value={t.drafted} label="drafted" />
+        <Stat value={t.waiting} label="waiting on you" />
+        <Stat value={t.expired} label="expired unsent" tone={t.expired > 0 ? 'bad' : undefined} />
+      </div>
 
-      <h2>Last 14 days</h2>
-      <div className="panel scroll">
-        <table>
-          <thead>
-            <tr><th>day</th><th className="num">discovered</th><th className="num">scored</th><th className="num">sent</th><th className="num">replied</th><th style={{ width: '42%' }}>discovered</th></tr>
-          </thead>
-          <tbody>
-            {days.map((d) => (
-              <tr key={d.day}>
-                <td className="muted">{d.day}</td>
-                <td className="num">{d.discovered || ''}</td>
-                <td className="num">{d.scored || ''}</td>
-                <td className="num">{d.sent || ''}</td>
-                <td className="num">{d.replied || ''}</td>
-                <td><div className="bar" style={{ width: `${(d.discovered / maxDay) * 100}%` }} /></td>
-              </tr>
+      {/* The queue — the only part that needs a person */}
+      <section>
+        <div className="section-head">
+          <h2>Waiting on you</h2>
+          <span className="muted num">
+            {t.capUsed}/{t.capTotal} sent against today&rsquo;s cap
+          </span>
+        </div>
+        <p className="section-note">
+          Every listing here has to be submitted by hand. Applicant tracking systems gate their
+          application endpoints behind a key only the employer holds, and the job boards hide the
+          outbound apply link, so nothing can be sent automatically. Copy puts the draft on your
+          clipboard and opens the listing.
+        </p>
+
+        {queue.length === 0 ? (
+          <div className="empty-panel">
+            Queue is clear. Listings arrive here once they score at or above the threshold — ingest
+            runs hourly once the schedule is switched on.
+          </div>
+        ) : (
+          <div className="queue">
+            {queue.map((r) => (
+              <QueueRow
+                key={r.id}
+                id={r.id}
+                score={r.score}
+                company={r.company}
+                title={r.title}
+                url={r.url}
+                source={r.source}
+                applyMethod={r.apply_method}
+                caseStudy={r.case_study_used}
+                comp={r.comp_raw}
+                location={r.location}
+                discoveredAt={r.discovered_at}
+                reason={r.score_reason}
+                flags={flagsOf(r)}
+                draft={null}
+              />
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        )}
+      </section>
 
-      <h2>Outcomes</h2>
-      <div className="grid cols-4">
-        <div className="panel">
-          <div className="stat">{sent.length}</div>
-          <div className="stat-label">applications sent</div>
-        </div>
-        <div className="panel">
-          <div className="stat">{pct(sent.length === 0 ? null : replied.length / sent.length)}</div>
-          <div className="stat-label">reply rate</div>
-        </div>
-        <div className="panel">
-          <div className="stat">{median === null ? '—' : `${median.toFixed(1)}h`}</div>
-          <div className="stat-label">median discovery to apply</div>
-        </div>
-        <div className="panel">
-          <div className="stat">{queue.length}</div>
-          <div className="stat-label">awaiting action</div>
-        </div>
-      </div>
+      {/* Sent */}
+      <section>
+        <h2>Sent</h2>
+        {sentLog.length === 0 ? (
+          <div className="empty-panel">
+            Nothing sent yet. Applications appear here with their outcome once the drafter is built
+            and dry run is switched off.
+          </div>
+        ) : (
+          <div className="log">
+            {sentLog.map((r) => (
+              <div className="log-row" key={r.id}>
+                <div className="muted num log-when">{ago(r.sent_at)}</div>
+                <div className="log-what">
+                  {r.title}, {r.company ?? 'unknown'}
+                </div>
+                <div className={r.replied_at !== null ? 'ok' : 'muted'}>
+                  {r.replied_at !== null
+                    ? 'Replied'
+                    : r.outcome === 'rejected'
+                      ? 'Rejected'
+                      : 'No reply yet'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-      <div className="grid cols-2" style={{ marginTop: 12 }}>
-        <RateTable
-          title="Reply rate by score band"
+      {/* Analytics — weekly reading, deliberately last */}
+      <section>
+        <h2>What&rsquo;s working</h2>
+        <p className="section-note">
+          Reply rate by score band tells you where the threshold belongs — if the band below it
+          replies as often as the band above, good applications are being discarded. By case study,
+          which of the four to lead with.
+        </p>
+
+        <div className="stats-row">
+          <Stat value={rows.filter((r) => r.sent_at !== null).length} label="applications sent" />
+          <Stat
+            value={pct(
+              rows.filter((r) => r.sent_at !== null).length === 0
+                ? null
+                : rows.filter((r) => r.replied_at !== null).length /
+                    rows.filter((r) => r.sent_at !== null).length,
+            )}
+            label="reply rate"
+          />
+          <Stat value={median === null ? '—' : `${median.toFixed(1)}h`} label="discovery to apply" />
+        </div>
+
+        <Breakdown
+          title="Score band"
           rows={replyRateByScoreBand(rows)}
-          note="This is the breakdown that tells you whether the threshold is in the right place — if the band below the threshold replies as often as the band above, you are discarding good applications."
+          note="No applications sent yet, so there is nothing to compare. This is the breakdown that decides where the threshold belongs."
         />
-        <RateTable
-          title="Reply rate by case study"
+        <Breakdown
+          title="Case study used"
           rows={replyRateByCaseStudy(rows)}
-          note="Which of the four case studies actually works. Without this you are guessing which project to lead with."
+          note="Nothing sent yet. Once it fills in, this says which of the four projects to lead with — currently a guess."
         />
-      </div>
-      <div className="grid cols-2" style={{ marginTop: 12 }}>
-        <RateTable
-          title="Reply rate by source"
+        <Breakdown
+          title="Source"
           rows={replyRateBySource(rows)}
-          note="Whether a source earns its place in outcomes rather than row counts."
+          note="Nothing sent yet. This is how a source earns its place in outcomes rather than row counts."
         />
-        <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Pipeline</h2>
-          <table>
-            <tbody>
-              {[...byStatus.entries()].sort((a, b) => b[1] - a[1]).map(([status, n]) => (
-                <tr key={status}>
-                  <td>{status}</td>
-                  <td className="num">{n.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
 
-      <h2>Queue — {queue.length} awaiting action</h2>
-      <Queue rows={queue} />
+      {/* Controls last: reached deliberately, not fumbled into */}
+      <section>
+        <h2>Controls</h2>
+        <Controls
+          killSwitch={killed}
+          dryRun={dryRun}
+          dailySendCap={capTotal}
+          alertsEnabled={settings['alerts_enabled'] !== false}
+        />
+        <p className="section-note">
+          {rows.length.toLocaleString()} listings held ·{' '}
+          {rows.filter((r) => r.status === 'skipped').length.toLocaleString()} filtered out before
+          scoring · {h.suppressedCount} alert occurrence(s) currently suppressed by the cooldown
+        </p>
+      </section>
     </>
   );
 }
 
-/**
- * The manual queue. Every row lands here: ATS endpoints need an employer-held key
- * and the aggregators hide the outbound apply link, so there is no automated
- * application path from any source. The one-click assist is the product — copy the
- * letter, open the listing, under ten seconds per application.
- */
-function Queue({ rows }: { rows: Opportunity[] }) {
-  if (rows.length === 0) {
-    return (
-      <div className="panel">
-        <p className="empty">
-          Nothing queued. Listings arrive here once they score at or above the threshold.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="panel scroll">
-      <table>
-        <thead>
-          <tr>
-            <th className="num">score</th><th>role</th><th>location</th><th>comp</th>
-            <th>material</th><th>apply</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).map((r) => (
-            <tr key={r.id}>
-              <td className="num"><strong>{r.score ?? '—'}</strong></td>
-              <td>
-                <strong>{r.company ?? 'unknown'}</strong> — {r.title}
-                {r.score_reason && <div className="muted">{r.score_reason}</div>}
-                {flagsOf(r).length > 0 && (
-                  <div style={{ marginTop: 3 }}>
-                    {flagsOf(r).map((f) => <span key={f} className="pill" style={{ marginRight: 4 }}>{f}</span>)}
-                  </div>
-                )}
-              </td>
-              <td className="muted">{r.location ?? '—'}</td>
-              <td className="muted">{r.comp_raw ?? '—'}</td>
-              <td className="muted">{r.resume_variant ?? '—'}<br />{r.case_study_used ?? '—'}</td>
-              <td><span className="pill">{r.apply_method ?? '—'}</span></td>
-              <td><a href={r.url} target="_blank" rel="noreferrer">open</a></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+export type { Opportunity };

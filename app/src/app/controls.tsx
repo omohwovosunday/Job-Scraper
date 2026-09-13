@@ -18,7 +18,7 @@ type Props = {
   alertsEnabled: boolean;
 };
 
-export function KillSwitch(props: Props) {
+export function Controls(props: Props) {
   const [state, setState] = useState(props);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);

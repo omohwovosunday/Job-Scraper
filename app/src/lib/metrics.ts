@@ -233,3 +233,73 @@ export async function loadSettings(): Promise<Record<string, unknown>> {
   if (error) throw new Error(`settings: ${error.message}`);
   return Object.fromEntries((data ?? []).map((r) => [r.key as string, r.value]));
 }
+
+// --- Additions adopted from the dashboard mockup -----------------------------
+
+export type Today = {
+  sent: number;
+  replies: number;
+  drafted: number;
+  waiting: number;
+  expired: number;
+  capUsed: number;
+  capTotal: number;
+};
+
+/** Local-day boundary, so "today" means the operator's today, not UTC's. */
+function startOfToday(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+const EXPIRY_DAYS = 14;
+
+/**
+ * Today's counters, plus the one the mockup was right to ask for: listings that
+ * scored above the threshold and then aged out without anyone applying.
+ *
+ * That number is the honest measure of whether the queue is being worked. Nothing
+ * else on the page says "the pipeline did its job and you did not" — sent stays
+ * flat, the queue just grows, and it reads as a quiet backlog rather than a loss.
+ */
+export function today(rows: Opportunity[], capTotal: number): Today {
+  const since = startOfToday();
+  const on = (iso: string | null) => iso !== null && new Date(iso).getTime() >= since;
+  const expiryCutoff = Date.now() - EXPIRY_DAYS * 86_400_000;
+
+  const sentToday = rows.filter((r) => on(r.sent_at)).length;
+  return {
+    sent: sentToday,
+    replies: rows.filter((r) => on(r.replied_at)).length,
+    drafted: rows.filter((r) => r.status === 'drafted' || r.status === 'queued').length,
+    waiting: rows.filter((r) => r.status === 'scored' || r.status === 'queued').length,
+    expired: rows.filter(
+      (r) =>
+        r.sent_at === null &&
+        (r.status === 'scored' || r.status === 'queued') &&
+        new Date(r.discovered_at).getTime() < expiryCutoff,
+    ).length,
+    capUsed: sentToday,
+    capTotal,
+  };
+}
+
+/**
+ * What a failing stage still leaves working. A fault banner that only says
+ * "scorer failed" makes you guess whether anything is still moving.
+ */
+export function faultConsequence(stage: string): string {
+  switch (stage) {
+    case 'ingest':
+      return 'Nothing new is being discovered. Scoring and the queue still work on what is already held.';
+    case 'process':
+      return 'No new listings are being scored, so the queue stops growing. Discovery continues.';
+    case 'outreach':
+      return 'Cold outreach is stalled. Job applications are unaffected.';
+    case 'followup':
+      return 'Follow-ups are stalled. Nothing else is affected.';
+    default:
+      return 'Other stages are unaffected.';
+  }
+}
