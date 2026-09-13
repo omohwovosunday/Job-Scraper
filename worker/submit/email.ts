@@ -11,27 +11,76 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import nodemailer, { type Transporter } from 'nodemailer';
+import { db } from '../lib/db.js';
 import { requireString } from '../lib/env.js';
 import { isPlausibleApplicationEmail } from '../resolve/patterns.js';
 import { RESUME_VARIANTS, type ResumeVariant } from '../llm/config.js';
 
 /**
- * Where the resume PDFs live. Gitignored along with the rest of knowledge/, which
- * is correct for a public repo and is also the reason a GitHub Actions run cannot
- * attach one: the checkout has no copy. See assertResumeAvailable.
+ * Where the resume PDFs live locally. Gitignored along with the rest of knowledge/,
+ * which is correct for a public repo and is also why a GitHub Actions checkout has
+ * no copy. Storage is the fallback that a scheduled run can actually reach.
  */
 const RESUME_DIR = 'knowledge/resumes';
 
+/** Private bucket. Never make it public: these carry a real name and history. */
+export const RESUME_BUCKET = 'resumes';
+
 export const DEFAULT_VARIANT: ResumeVariant = 'product-design';
 
-export function resumePath(variant: string | null): string {
-  const v = (RESUME_VARIANTS as readonly string[]).includes(variant ?? '')
+function resolveVariant(variant: string | null): ResumeVariant {
+  return (RESUME_VARIANTS as readonly string[]).includes(variant ?? '')
     ? (variant as ResumeVariant)
     : DEFAULT_VARIANT;
-  return path.join(RESUME_DIR, `Sunday-Omohwovo-${v}.pdf`);
+}
+
+export function resumeFilename(variant: string | null): string {
+  return `Sunday-Omohwovo-${resolveVariant(variant)}.pdf`;
+}
+
+export function resumePath(variant: string | null): string {
+  return path.join(RESUME_DIR, resumeFilename(variant));
+}
+
+export function storageKey(variant: string | null): string {
+  return resumeFilename(variant);
 }
 
 export type Attachment = { filename: string; content: Buffer };
+
+function assertPdf(content: Buffer, where: string): Buffer {
+  if (content.length === 0) throw new Error(`${where} is empty`);
+  // A Supabase download of a missing object can return an error page rather than
+  // failing outright, and a 400-byte "not found" attached to an application would
+  // be worse than no send at all.
+  if (content.subarray(0, 4).toString('latin1') !== '%PDF') {
+    throw new Error(`${where} is not a PDF (starts with ${JSON.stringify(content.subarray(0, 8).toString('latin1'))})`);
+  }
+  return content;
+}
+
+/** The local copy, which is the source of truth when it exists. */
+async function fromDisk(variant: string | null): Promise<Attachment | null> {
+  try {
+    const file = resumePath(variant);
+    return { filename: path.basename(file), content: assertPdf(await readFile(file), file) };
+  } catch {
+    return null;
+  }
+}
+
+/** The copy a GitHub Actions run can reach. Populated by `npm run sync:resumes`. */
+async function fromStorage(variant: string | null): Promise<Attachment | null> {
+  try {
+    const key = storageKey(variant);
+    const { data, error } = await db().storage.from(RESUME_BUCKET).download(key);
+    if (error !== null || data === null) return null;
+    const content = Buffer.from(await data.arrayBuffer());
+    return { filename: key, content: assertPdf(content, `${RESUME_BUCKET}/${key}`) };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Loads the resume, or throws.
@@ -39,21 +88,22 @@ export type Attachment = { filename: string; content: Buffer };
  * Deliberately not optional. An application email with no resume attached is worse
  * than no application: it reaches a real hiring manager, reads as careless, and
  * cannot be retracted. Failing the send is recoverable; sending a bare email is not.
+ *
+ * Disk first, then Storage. Disk is where the generator writes, so preferring it
+ * means a locally regenerated PDF is used immediately rather than silently losing
+ * to a stale upload. Actions has no disk copy and falls through to Storage, which
+ * is the whole reason the bucket exists.
  */
 export async function loadResume(variant: string | null): Promise<Attachment> {
-  const file = resumePath(variant);
-  try {
-    const content = await readFile(file);
-    if (content.length === 0) throw new Error('file is empty');
-    return { filename: path.basename(file), content };
-  } catch (err: unknown) {
-    const why = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `Resume not readable at ${file} (${why}). Nothing was sent. ` +
-        'knowledge/ is gitignored, so a GitHub Actions checkout has no copy of these ' +
-        'PDFs — a scheduled send needs them in Supabase Storage first.',
-    );
-  }
+  const found = (await fromDisk(variant)) ?? (await fromStorage(variant));
+  if (found !== null) return found;
+
+  throw new Error(
+    `Resume "${resumeFilename(variant)}" is readable neither on disk (${resumePath(variant)}) ` +
+      `nor in Supabase Storage (${RESUME_BUCKET}/${storageKey(variant)}). Nothing was sent. ` +
+      'knowledge/ is gitignored, so a GitHub Actions checkout has no local copy: run ' +
+      '`npm run sync:resumes` to publish them to the bucket.',
+  );
 }
 
 export type Outgoing = {

@@ -28,7 +28,9 @@
     "score:smoke": "tsx scripts/score-smoke.ts",
     "check:drafter": "tsx scripts/check-drafter.ts",
     "draft:smoke": "tsx scripts/draft-smoke.ts",
-    "check:sender": "tsx scripts/check-sender.ts"
+    "check:sender": "tsx scripts/check-sender.ts",
+    "sync:resumes": "tsx scripts/sync-resumes.ts",
+    "verify:storage": "tsx scripts/verify-storage.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

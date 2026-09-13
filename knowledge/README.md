@@ -38,8 +38,22 @@ because the scorer emits one of those strings and the drafter attaches the file
 named after it; renaming a file here breaks the attachment silently.
 
 Regenerate with `node knowledge/resumes/build-resumes.mjs`, which prints through
-headless Chrome. Two properties are load-bearing and worth re-checking after any
-edit:
+headless Chrome, then publish with `npm run sync:resumes`.
+
+That second step is not optional once the cron is on. This directory is gitignored,
+so a GitHub Actions checkout has no PDFs at all, and the sender refuses to send an
+application with nothing attached rather than mailing a bare letter to a real hiring
+manager. The private `resumes` bucket in Supabase Storage is the copy a scheduled
+run can reach. Local files win when both exist, so a freshly regenerated PDF is used
+immediately rather than losing silently to a stale upload — which is also why the
+sync is a step you have to remember. `npm run verify:storage` checks the bucket is
+present, private, and complete.
+
+Never make that bucket public. The PDFs carry a real name, email, employer history
+and city, and a public bucket puts them on a guessable URL for anyone who learns the
+project id.
+
+Two further properties are load-bearing and worth re-checking after any edit:
 
 - **The contact email must match `GMAIL_USER`.** Applications send from that
   address and its inbox is the only one the pipeline reads. A resume advertising a

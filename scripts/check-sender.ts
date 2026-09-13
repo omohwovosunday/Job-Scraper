@@ -88,21 +88,32 @@ async function resumes(): Promise<void> {
   }
   check('the real resume loads (it is on disk)', !threw);
 
-  // RESUME_DIR is relative, so moving the working directory is the honest way to
-  // simulate the case that actually matters: a GitHub Actions checkout, where
-  // knowledge/ does not exist at all.
+  // Both sources have to be unavailable to reach the throw, since Storage is now
+  // the fallback and it works. Moving out of the project removes the local files;
+  // blanking the credentials stops the Storage leg the way an unconfigured
+  // environment would. db() is lazy and nothing here has built a client yet.
+  //
+  // The Actions case — no local files but Storage reachable — is the opposite
+  // assertion and needs real credentials, so it lives in `npm run verify:storage`.
   const original = process.cwd();
+  const url = process.env.SUPABASE_URL;
   process.chdir(tmpdir());
+  process.env.SUPABASE_URL = '';
   try {
     await loadResume('product-design');
   } catch (err: unknown) {
     message = err instanceof Error ? err.message : String(err);
   } finally {
     process.chdir(original);
+    if (url === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = url;
   }
-  check('a missing resume throws rather than sending without one', message.length > 0);
-  check('the error explains the Actions gap',
-    /Supabase Storage|gitignored/.test(message), message.slice(0, 80));
+  check('with neither disk nor Storage, it throws rather than sending without one',
+    message.length > 0);
+  check('the error names both sources it tried',
+    /disk/i.test(message) && /Storage/i.test(message), message.slice(0, 90));
+  check('the error says how to fix it',
+    /sync:resumes/.test(message), message.slice(0, 90));
 }
 
 function gateOrdering(): void {
