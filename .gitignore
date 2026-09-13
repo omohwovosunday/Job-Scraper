@@ -20,6 +20,7 @@ npm-debug.log*
 
 # --- Next.js / Vercel (dashboard, step 8) ---
 /app/.next/
+/app/.next-build/
 /app/out/
 .vercel
 
