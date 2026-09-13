@@ -163,6 +163,11 @@ function formats(): void {
       .every((m) => formatFor(m) !== 'free_text_answer'));
   check('every format has a word ceiling',
     Object.values(DRAFTER_CONFIG.maxWords).every((n) => n > 0));
+  // Only email carries a subject. The model supplied one on three of five cover
+  // letters and omitted it on the other two, so the stage decides rather than
+  // leaving it to a coin flip: an ATS form has nowhere to put it.
+  check('only the email format keeps a subject line', formatFor('email') === 'email'
+    && formatFor('ats') !== 'email' && formatFor('form') !== 'email');
 }
 
 async function prompt(): Promise<void> {

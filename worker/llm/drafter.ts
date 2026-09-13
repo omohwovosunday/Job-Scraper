@@ -227,10 +227,16 @@ async function requestDraft(
     maxOutputTokens: DRAFTER_CONFIG.maxOutputTokens,
   });
 
-  const draft = validateDraft(result.value);
-  if (draft === null) {
+  const parsed = validateDraft(result.value);
+  if (parsed === null) {
     return { draft: null, problems: [result.truncated ? 'response truncated' : 'unparseable JSON'], calls: 1 };
   }
+
+  // Only email has a subject line. The prompt says so, and the model still
+  // supplied one on three of five cover letters and omitted it on the other two —
+  // not a judgement call it gets to make inconsistently, since an ATS form has no
+  // field to put it in and it would end up prepended to the letter body or lost.
+  const draft: Draft = format === 'email' ? parsed : { ...parsed, subject: null };
 
   const problems: string[] = [];
   const limit = DRAFTER_CONFIG.maxWords[format];
