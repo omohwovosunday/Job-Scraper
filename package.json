@@ -21,7 +21,9 @@
     "check:scorer": "tsx scripts/check-scorer.ts",
     "score:report": "tsx scripts/score-report.ts",
     "check:ats": "tsx scripts/check-ats.ts",
-    "detect:watchlist": "tsx scripts/detect-watchlist.ts"
+    "detect:watchlist": "tsx scripts/detect-watchlist.ts",
+    "dashboard": "npm --prefix app run dev",
+    "dashboard:build": "npm --prefix app run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
