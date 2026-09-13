@@ -24,7 +24,8 @@
     "detect:watchlist": "tsx scripts/detect-watchlist.ts",
     "dashboard": "npm --prefix app run dev",
     "dashboard:build": "npm --prefix app run build",
-    "measure:reddit": "tsx scripts/measure-reddit.ts"
+    "measure:reddit": "tsx scripts/measure-reddit.ts",
+    "score:smoke": "tsx scripts/score-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
