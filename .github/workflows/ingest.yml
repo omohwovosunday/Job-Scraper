@@ -13,10 +13,9 @@ on:
   # emails the owner every time, so leaving this on would have produced a failure
   # notification every 20 minutes before the pipeline had ever worked once.
   #
-  # Uncomment after `gh secret set` has been run for all of:
-  #   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, the scoring provider key,
-  #   RATE_FLOOR_HOURLY_USD, RATE_FLOOR_MONTHLY_USD, RATE_FLOOR_JUNIOR_HOURLY_USD,
-  #   SCORE_THRESHOLD
+  # Uncomment after `gh secret set` has been run for:
+  #   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GMAIL_USER, GMAIL_APP_PASSWORD
+  # (NOTIFY_EMAIL is optional; alerts fall back to GMAIL_USER.)
   #
   # Hourly rather than every 20 minutes. The original cadence was specified when
   # the system was going to submit applications autonomously, where being first
@@ -53,12 +52,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Ingest does not score, but config.ts is imported along the way and
-          # asserts these when a stage actually needs them. Supplied so a future
-          # scoring step in this workflow fails on data, not on configuration.
-          RATE_FLOOR_HOURLY_USD: ${{ secrets.RATE_FLOOR_HOURLY_USD }}
-          RATE_FLOOR_MONTHLY_USD: ${{ secrets.RATE_FLOOR_MONTHLY_USD }}
-          SCORE_THRESHOLD: ${{ secrets.SCORE_THRESHOLD }}
+          # No rate floors here. commercial() is lazily evaluated and only
+          # assertCommercialEnv() in the process stage forces it, so ingest reads
+          # none of them. Listing secrets a workflow never uses is friction at
+          # setup time and a lie about what the job depends on.
           # So a failed run can alert rather than failing silently into the log.
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
