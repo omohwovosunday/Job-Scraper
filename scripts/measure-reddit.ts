@@ -6,88 +6,100 @@
  *
  *   npm run measure:reddit
  *
- * This matters more than it sounds. Across 2,557 listings from six sources, the
+ * This matters more than it sounds. Across 2,557 listings from six sources the
  * apply path is 2,224 ATS and 333 form and ZERO email — and email is the only
- * channel a machine can use. Reddit is the first source anyone has proposed that
- * might change that. If a good share of posts carry a real address, it is the most
- * valuable source in the project. If they mostly say "DM me", it is another manual
- * queue feed with worse signal than We Work Remotely, which costs 31 rows for 12
- * worldwide-eligible roles.
+ * channel a machine can use. Reddit is the first source proposed that might change
+ * that. If a good share of posts carry a real address it is the most valuable
+ * source in the project; if they mostly say "DM me" it is another manual feed with
+ * worse signal than We Work Remotely, which returns 12 worldwide-eligible roles
+ * from 31 rows.
+ *
+ * NO CREDENTIALS NEEDED. The original plan used OAuth against a registered script
+ * app, which turned out to be a dead end — the app-creation form is gated behind a
+ * CAPTCHA that fails behind a VPN. Reddit also 403s the .json endpoints for
+ * non-browser agents.
+ *
+ * But Reddit publishes Atom feeds at /r/<sub>/new/.rss, and those return 200 with
+ * the FULL post body, no auth, no registration. A feed is a reader interface
+ * published for machines, so this is the sanctioned path rather than a way around
+ * the block — the same distinction that made the aggregators' 403s a stop sign
+ * while their feeds stayed fair game.
  *
  * A "DM me" post is NOT automatable. Sending a Reddit direct message means driving
- * a user account, which is the same platform automation the project declines for
- * LinkedIn and Upwork. So the two are counted separately and only the email share
- * is treated as reachable.
+ * a user account, the same platform automation this project declines for LinkedIn
+ * and Upwork. Email and DM are counted separately; only email is reachable.
  *
- * Writes nothing. Reads nothing from the database. Throwaway by design.
- *
- * Credentials: register a "script" app at reddit.com/prefs/apps, then set
- * REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET and REDDIT_USER_AGENT. Reddit requires a
- * descriptive user agent with a contact; a generic one gets blocked.
+ * Writes nothing, stores nothing, touches no database.
  */
 
-import { requireString } from '../worker/lib/env.js';
 import { isPlausibleApplicationEmail } from '../worker/resolve/patterns.js';
 
-const OAUTH = 'https://www.reddit.com/api/v1/access_token';
-const API = 'https://oauth.reddit.com';
+/**
+ * Subreddit names are case-insensitive, so designjobs and DesignJobs are one
+ * subreddit and two requests.
+ */
+const DEFAULT_SUBS = ['forhire', 'hiring', 'remotejs', 'designjobs', 'jobbit', 'RemoteJobs'];
 
 /**
- * Subreddit names are case-insensitive, so "designjobs" and "DesignJobs" are one
- * subreddit and two requests. Listed once.
+ * Override with arguments to re-sample only the subs a previous run could not
+ * reach: `npm run measure:reddit -- forhire designjobs`. Reddit refuses often
+ * enough that a full pass rarely returns everything, and repeating the subs that
+ * already answered just spends the rate limit again.
  */
-const SUBS = ['forhire', 'hiring', 'remotejs', 'designjobs', 'RemoteJobs', 'jobbit'] as const;
+const SUBS = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+const TARGETS = SUBS.length > 0 ? SUBS : DEFAULT_SUBS;
 
-type Post = {
-  id: string;
-  title: string;
-  selftext: string;
-  author: string;
-  created_utc: number;
-  permalink: string;
-  link_flair_text: string | null;
-  subreddit: string;
-  over_18: boolean;
-  removed_by_category?: string | null;
-};
+const USER_AGENT = 'job-scraper/0.1 (personal job search; contact u/Designs_laucher)';
+/**
+ * Reddit 429s hard on the RSS endpoints. Nine seconds was not enough — four of six
+ * subreddits were refused in the first run, leaving a sample of three, which is no
+ * sample at all. Thirty-five seconds costs three minutes and returns real numbers.
+ */
+const DELAY_MS = 35_000;
 
-async function token(): Promise<string> {
-  const id = requireString('REDDIT_CLIENT_ID', 'Register a script app at reddit.com/prefs/apps.');
-  const secret = requireString('REDDIT_CLIENT_SECRET', 'The secret from that same app.');
-  const ua = requireString(
-    'REDDIT_USER_AGENT',
-    'Reddit requires a descriptive agent with a contact, e.g. "job-scraper/0.1 by u/yourname".',
-  );
+type Post = { title: string; body: string; link: string; author: string; updated: string };
 
-  const res = await fetch(OAUTH, {
-    method: 'POST',
-    headers: {
-      authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString('base64')}`,
-      'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': ua,
-    },
-    body: 'grant_type=client_credentials',
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Reddit OAuth returned ${res.status}. A 401 usually means the app is not of type "script", ` +
-        'or the id and secret are swapped.',
-    );
+function decode(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function stripTags(s: string): string {
+  return s.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parseFeed(xml: string): Post[] {
+  const out: Post[] = [];
+  for (const m of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const e = m[1] ?? '';
+    const pick = (tag: string) => new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(e)?.[1]?.trim() ?? '';
+    const rawContent = /<content type="html">([\s\S]*?)<\/content>/.exec(e)?.[1] ?? '';
+    out.push({
+      title: decode(pick('title')),
+      // Decoded twice: the feed escapes the HTML, and the HTML holds its own entities.
+      body: stripTags(decode(decode(rawContent))),
+      link: /<link href="([^"]+)"/.exec(e)?.[1] ?? '',
+      author: pick('name'),
+      updated: pick('updated'),
+    });
   }
-  return ((await res.json()) as { access_token: string }).access_token;
+  return out;
 }
 
 /** [HIRING] means an employer. [FOR HIRE] means the poster is the candidate. */
 function isEmployerPost(p: Post): boolean {
-  const hay = `${p.link_flair_text ?? ''} ${p.title}`.toLowerCase();
-  if (/\bfor\s*hire\b/.test(hay)) return false;
-  return /\bhiring\b|\bwe(?:'re| are) (?:hiring|looking)\b|\bseeking\b/.test(hay);
+  const t = p.title.toLowerCase();
+  if (/\bfor\s*hire\b/.test(t)) return false;
+  return /\bhiring\b|\bwe(?:'re| are) (?:hiring|looking)\b|\bseeking\b|\[\s*h\s*\]/.test(t);
 }
 
 function isDesignish(p: Post): boolean {
-  const hay = `${p.title} ${p.selftext}`.toLowerCase();
-  return /\b(designer|design|ux|ui|product design|figma|webflow|front[- ]?end|design engineer)\b/.test(hay);
+  const hay = `${p.title} ${p.body}`.toLowerCase();
+  return /\b(designer|design|ux|ui|product design|figma|webflow|front[- ]?end|design engineer|branding)\b/.test(hay);
 }
 
 /** Real addresses only — asset filenames and noreply boxes do not count. */
@@ -97,117 +109,119 @@ function emailsIn(text: string): string[] {
     const address = m[0].toLowerCase();
     if (isPlausibleApplicationEmail(address)) found.add(address);
   }
-  // "name (at) domain (dot) com" is common where subs discourage plain addresses.
-  for (const m of text.matchAll(/[a-z0-9._%+-]+\s*(?:\(at\)|\[at\]|\sat\s)\s*[a-z0-9.-]+\s*(?:\(dot\)|\[dot\]|\sdot\s)\s*[a-z]{2,}/gi)) {
+  // "name (at) domain (dot) com", common where subs discourage plain addresses.
+  for (const m of text.matchAll(
+    /[a-z0-9._%+-]+\s*(?:\(at\)|\[at\]|\sat\s)\s*[a-z0-9.-]+\s*(?:\(dot\)|\[dot\]|\sdot\s)\s*[a-z]{2,}/gi,
+  )) {
     found.add(m[0].replace(/\s+/g, ' ').toLowerCase());
   }
   return [...found];
 }
 
-const DM_ONLY = /\b(dm|pm|message|msg)\s+me\b|\bsend\s+(?:me\s+)?a\s+(?:dm|pm)\b|\breach\s+out\s+(?:via|by)\s+(?:dm|pm|chat)\b/i;
+const DM_ONLY =
+  /\b(?:dm|pm|message|msg)\s+me\b|\bsend\s+(?:me\s+)?a\s+(?:dm|pm)\b|\breach\s+out\s+(?:via|by|in)\s+(?:dm|pm|chat)\b|\bmessage\s+me\s+(?:with|for|if)\b/i;
 
-/** Rates quoted in the body — the number the compensation floor would judge. */
+/** Rates quoted in the body — what the compensation floor would judge. */
 function ratesIn(text: string): string[] {
   const out = new Set<string>();
-  for (const m of text.matchAll(/[$€£]\s?\d[\d,.]*\s*(?:k\b)?(?:\s*(?:-|–|to)\s*[$€£]?\s?\d[\d,.]*\s*k?\b)?(?:\s*(?:\/|per\s)\s*(?:hr|hour|day|week|month|year|yr))?/gi)) {
+  for (const m of text.matchAll(
+    /[$€£]\s?\d[\d,.]*\s*k?\b(?:\s*(?:-|–|to)\s*[$€£]?\s?\d[\d,.]*\s*k?\b)?(?:\s*(?:\/|per\s)\s*(?:hr|hour|day|week|month|year|yr|project|word))?/gi,
+  )) {
     const s = m[0].replace(/\s+/g, ' ').trim();
     if (/\d/.test(s)) out.add(s);
   }
   return [...out].slice(0, 3);
 }
 
-async function fetchSub(sub: string, bearer: string, ua: string): Promise<Post[]> {
-  const res = await fetch(`${API}/r/${sub}/new?limit=100`, {
-    headers: { authorization: `Bearer ${bearer}`, 'user-agent': ua },
-    signal: AbortSignal.timeout(25_000),
+type Bucket = 'email' | 'dm-only' | 'link-only' | 'nothing';
+
+async function fetchSub(sub: string): Promise<Post[]> {
+  const res = await fetch(`https://www.reddit.com/r/${sub}/new/.rss`, {
+    headers: { 'user-agent': USER_AGENT, accept: 'application/atom+xml' },
+    signal: AbortSignal.timeout(30_000),
   });
-  if (res.status === 403 || res.status === 404) {
-    console.log(`  r/${sub}: unavailable (${res.status})`);
-    return [];
-  }
   if (res.status === 429) {
-    console.log(`  r/${sub}: rate limited`);
+    console.log(`  r/${sub}: rate limited — re-run in a few minutes`);
     return [];
   }
   if (!res.ok) {
     console.log(`  r/${sub}: HTTP ${res.status}`);
     return [];
   }
-  const body = (await res.json()) as { data?: { children?: { data: Post }[] } };
-  return (body.data?.children ?? []).map((c) => c.data);
+  return parseFeed(await res.text());
 }
 
-type Bucket = 'email' | 'dm-only' | 'link-only' | 'nothing';
-
 async function main(): Promise<void> {
-  const ua = requireString('REDDIT_USER_AGENT', 'Required by Reddit.');
-  const bearer = await token();
-
   let fetched = 0;
   let employer = 0;
-  const relevant: { post: Post; bucket: Bucket; emails: string[]; rates: string[] }[] = [];
+  const relevant: { post: Post; bucket: Bucket; emails: string[]; rates: string[]; sub: string }[] = [];
 
-  for (const sub of SUBS) {
-    const posts = await fetchSub(sub, bearer, ua);
+  for (const sub of TARGETS) {
+    const posts = await fetchSub(sub);
     fetched += posts.length;
-    const live = posts.filter((p) => !p.over_18 && !p.removed_by_category);
-    const hiring = live.filter(isEmployerPost);
+    const hiring = posts.filter(isEmployerPost);
     employer += hiring.length;
     const design = hiring.filter(isDesignish);
 
     for (const post of design) {
-      const text = `${post.title}\n${post.selftext}`;
+      const text = `${post.title}\n${post.body}`;
       const emails = emailsIn(text);
       const bucket: Bucket =
-        emails.length > 0 ? 'email'
-        : DM_ONLY.test(text) ? 'dm-only'
-        : /https?:\/\//.test(text) ? 'link-only'
-        : 'nothing';
-      relevant.push({ post, bucket, emails, rates: ratesIn(text) });
+        emails.length > 0
+          ? 'email'
+          : DM_ONLY.test(text)
+            ? 'dm-only'
+            : /https?:\/\//.test(post.body)
+              ? 'link-only'
+              : 'nothing';
+      relevant.push({ post, bucket, emails, rates: ratesIn(text), sub });
     }
-    console.log(`  r/${sub}: ${posts.length} posts, ${hiring.length} hiring, ${design.length} design-ish`);
-    await new Promise((r) => setTimeout(r, 1500));
+    console.log(`  r/${sub.padEnd(11)} ${String(posts.length).padStart(3)} posts · ${String(hiring.length).padStart(3)} hiring · ${String(design.length).padStart(3)} design-ish`);
+    await new Promise((r) => setTimeout(r, DELAY_MS));
   }
 
   const count = (b: Bucket) => relevant.filter((r) => r.bucket === b).length;
   const share = (n: number) => (relevant.length === 0 ? '—' : `${((n / relevant.length) * 100).toFixed(0)}%`);
 
-  console.log(`\n=== ${fetched} posts fetched · ${employer} from employers · ${relevant.length} design-relevant ===`);
+  console.log(`\n=== ${fetched} posts · ${employer} from employers · ${relevant.length} design-relevant ===`);
+  if (relevant.length === 0) {
+    console.log('\nNothing design-relevant in this sample. These subs are bursty — re-run at a');
+    console.log('different hour before concluding anything.');
+    return;
+  }
+
   console.log('\nhow each design-relevant post could be applied to:');
   console.log(`  ${String(count('email')).padStart(4)}  ${share(count('email')).padStart(4)}  email in the post   -> AUTOMATABLE`);
   console.log(`  ${String(count('dm-only')).padStart(4)}  ${share(count('dm-only')).padStart(4)}  Reddit DM only      -> not automatable, same line as LinkedIn`);
-  console.log(`  ${String(count('link-only')).padStart(4)}  ${share(count('link-only')).padStart(4)}  external link only  -> manual queue, same as every other source`);
+  console.log(`  ${String(count('link-only')).padStart(4)}  ${share(count('link-only')).padStart(4)}  external link only  -> manual queue, like every other source`);
   console.log(`  ${String(count('nothing')).padStart(4)}  ${share(count('nothing')).padStart(4)}  no contact found    -> manual queue`);
 
   const withRate = relevant.filter((r) => r.rates.length > 0);
-  console.log(`\n${withRate.length}/${relevant.length} quote a rate in the body (${share(withRate.length)})`);
-  console.log('  These matter: comp_raw is null on this source, so every post would score');
-  console.log('  neutral on compensation — better than a listing that honestly states $60k.');
+  console.log(`\n${withRate.length}/${relevant.length} quote a rate (${share(withRate.length)}). comp_raw would be null on`);
+  console.log('this source, so every post scores NEUTRAL on compensation — better than a');
+  console.log('listing that honestly states $60k. These need extracting, not discarding.');
   for (const r of withRate.slice(0, 8)) {
-    console.log(`    ${r.rates.join(' , ').slice(0, 46).padEnd(48)} ${r.post.title.slice(0, 60)}`);
+    console.log(`    ${r.rates.join(' , ').slice(0, 40).padEnd(42)} ${r.post.title.slice(0, 58)}`);
   }
 
   const automatable = relevant.filter((r) => r.bucket === 'email');
   if (automatable.length > 0) {
     console.log('\nposts with a usable address:');
     for (const r of automatable.slice(0, 12)) {
-      console.log(`  ${r.emails[0]?.padEnd(32)} ${r.post.title.slice(0, 64)}`);
-      console.log(`    https://www.reddit.com${r.post.permalink}`);
+      console.log(`  ${(r.emails[0] ?? '').padEnd(34)} ${r.post.title.slice(0, 58)}`);
+      console.log(`    ${r.post.link}`);
     }
   }
 
   console.log('\n--- the decision ---');
-  if (relevant.length === 0) {
-    console.log('No design-relevant hiring posts in this sample. Re-run at a different hour');
-    console.log('before concluding anything — these subreddits are bursty.');
-  } else if (count('email') / relevant.length >= 0.25) {
-    console.log(`${share(count('email'))} carry a usable address. That is worth building: it is the only`);
-    console.log('source that would move the automated channel off zero.');
+  const emailShare = count('email') / relevant.length;
+  if (emailShare >= 0.25) {
+    console.log(`${share(count('email'))} carry a usable address. Worth building — the only source that`);
+    console.log('would move the automated channel off zero.');
   } else {
-    console.log(`Only ${share(count('email'))} carry a usable address, so most would land in the same`);
-    console.log('manual queue as everything else. Worth adding for coverage, but it does not');
-    console.log('change what the system is — judge it against We Work Remotely, which returns');
-    console.log('12 worldwide-eligible roles from 31 rows.');
+    console.log(`Only ${share(count('email'))} carry a usable address, so most land in the same manual`);
+    console.log('queue as everything else. Judge it on coverage against We Work Remotely,');
+    console.log('which returns 12 worldwide-eligible roles from 31 rows.');
   }
 }
 
