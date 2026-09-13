@@ -192,8 +192,11 @@ async function recruiteeAdapter(): Promise<void> {
   // data than any aggregator provides.
   check('recruitee: location carries the remote or onsite flag',
     listings.every((l) => /remote|hybrid|on-site/i.test(l.location ?? '')));
+  // /\d/, not /d/. The second form tests for a literal letter and passes on
+  // almost anything; it went unnoticed because every Hostaway salary is empty,
+  // so the left side of the || short-circuits and the regex is never reached.
   check('recruitee: comp is null rather than a fabricated zero',
-    listings.every((l) => l.compRaw === null || /d/.test(l.compRaw)));
+    listings.every((l) => l.compRaw === null || /\d/.test(l.compRaw)));
   check('recruitee: an empty salary object yields null',
     compFrom({ min: null, max: null, period: null, currency: null }) === null);
   check('recruitee: a populated salary assembles',
