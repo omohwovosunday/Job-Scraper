@@ -44,9 +44,13 @@ function shared(name: string, listings: RawListing[], tokenPrefix: string): void
 }
 
 async function leverAdapter(): Promise<void> {
-  console.log('\nLever adapter (live: gopuff)');
-  const listings = await fetchLever({ company: 'Gopuff', board_token: 'gopuff' });
-  shared('lever', listings, 'gopuff');
+  // neon, not gopuff. Lever serves at roughly 10KB/s and gopuff's board is 8MB,
+  // so it does not finish inside three minutes. neon is 123KB and returns in
+  // four seconds — the difference between a check that runs and one that is
+  // quietly disabled because it always times out.
+  console.log('\nLever adapter (live: neon)');
+  const listings = await fetchLever({ company: 'Neon', board_token: 'neon' });
+  shared('lever', listings, 'neon');
 
   // createdAt is epoch ms. Treating it as seconds would date everything to 1970.
   const dated = listings.filter((l) => l.postedAt !== null);

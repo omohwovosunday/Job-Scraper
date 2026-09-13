@@ -128,7 +128,12 @@ export async function fetchBoard(entry: WatchlistEntry): Promise<RawListing[]> {
   const url = `${API}/${encodeURIComponent(entry.board_token)}?mode=json`;
   const response = await globalThis.fetch(url, {
     headers: { 'user-agent': USER_AGENT, accept: 'application/json' },
-    signal: AbortSignal.timeout(30_000),
+    // 150s. Lever's API is slow in a way the other vendors are not — measured at
+    // roughly 10KB/s, and a board returns every posting with its full description
+    // in one response. Qonto, on the active watchlist, is 1.2MB and exceeds 60s;
+    // gopuff at 8MB did not finish inside 180s and is effectively unfetchable.
+    // A board too large to read still fails per-board rather than failing the run.
+    signal: AbortSignal.timeout(150_000),
   });
 
   if (response.status === 404) throw new BoardNotFoundError(SLUG, entry.board_token);
