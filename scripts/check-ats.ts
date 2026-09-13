@@ -10,6 +10,7 @@
 import { dedupeHash } from '../worker/lib/dedupe.js';
 import { fetchBoard as fetchLever, leverSlugFromUrl } from '../worker/sources/lever.js';
 import { fetchBoard as fetchAshby, ashbyBoardFromUrl, extractComp } from '../worker/sources/ashby.js';
+import { fetchBoard as fetchRecruitee, recruiteeBoardFromUrl, compFrom } from '../worker/sources/recruitee.js';
 import { candidateSlugs, detectFromUrl, INGESTABLE } from '../worker/sources/detect.js';
 import { BoardNotFoundError } from '../worker/sources/watchlist.js';
 import type { RawListing } from '../worker/sources/types.js';
@@ -165,8 +166,40 @@ function detection(): void {
       d === null ? 'null' : `${d.vendor}/${d.token}`);
   }
   check('a plain careers page is not guessed at', detectFromUrl('https://acme.com/careers') === null);
-  check('only vendors with adapters are marked ingestable',
-    INGESTABLE.length === 3 && !INGESTABLE.includes('workable'));
+  // Workable is detectable but permanently un-ingestable: its only public endpoint
+  // returns an empty jobs array for every account, including Automattic and Rippling.
+  check('workable is detectable but not ingestable',
+    !INGESTABLE.includes('workable') && INGESTABLE.includes('recruitee'));
+}
+
+async function recruiteeAdapter(): Promise<void> {
+  console.log('\nRecruitee adapter (live: hostaway)');
+  const listings = await fetchRecruitee({ company: 'Hostaway', board_token: 'hostaway' });
+  shared('recruitee', listings, 'hostaway');
+
+  // The reason this source exists. Every other source in the project resolves to
+  // ats or form; Recruitee publishes a per-job mailbox that routes into the
+  // employer's own ATS, and it is the only automated apply path found anywhere.
+  const withEmail = listings.filter((l) => l.applyEmail != null);
+  console.log(`  apply address published on ${withEmail.length}/${listings.length}`);
+  check('recruitee: publishes an application address', withEmail.length > 0);
+  check('recruitee: addresses look like real mailboxes',
+    withEmail.every((l) => /@/.test(l.applyEmail ?? '') && (l.applyEmail ?? '').length > 8),
+    JSON.stringify(withEmail.slice(0, 1).map((l) => l.applyEmail)));
+  console.log(`  example: ${withEmail[0]?.applyEmail}`);
+
+  // remote/hybrid/on_site are real booleans here, which is better eligibility
+  // data than any aggregator provides.
+  check('recruitee: location carries the remote or onsite flag',
+    listings.every((l) => /remote|hybrid|on-site/i.test(l.location ?? '')));
+  check('recruitee: comp is null rather than a fabricated zero',
+    listings.every((l) => l.compRaw === null || /d/.test(l.compRaw)));
+  check('recruitee: an empty salary object yields null',
+    compFrom({ min: null, max: null, period: null, currency: null }) === null);
+  check('recruitee: a populated salary assembles',
+    compFrom({ min: 60000, max: 80000, period: 'year', currency: 'EUR' }) === 'EUR 60,000 - 80,000 per year');
+  check('recruitee board name parsed from url',
+    recruiteeBoardFromUrl('https://hostaway.recruitee.com/o/x') === 'hostaway');
 }
 
 async function main(): Promise<void> {
@@ -174,6 +207,7 @@ async function main(): Promise<void> {
   detection();
   await leverAdapter();
   await ashbyAdapter();
+  await recruiteeAdapter();
 
   console.log('');
   if (failures.length > 0) {

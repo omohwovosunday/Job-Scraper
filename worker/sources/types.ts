@@ -25,6 +25,22 @@ export type RawListing = {
    */
   compRaw: string | null;
   postedAt: Date | null;
+  /**
+   * An address applications can be sent to, where the source publishes one.
+   *
+   * Almost always null. Across 2,557 listings from six sources, every row resolved
+   * to 'ats' or 'form' and none to 'email' — ATS vendors gate their application
+   * endpoints behind an employer-held key, and the aggregators hide the outbound
+   * apply link because that click is their product.
+   *
+   * Recruitee is the exception: it publishes a per-job mailbox on every offer, and
+   * mail sent there becomes a candidate record in the employer's own ATS. That is
+   * the only automated application path this project has found, so the field
+   * exists to carry it from the adapter through to the resolver rather than
+   * throwing it away and re-deriving it from a page fetch that would never
+   * succeed.
+   */
+  applyEmail?: string | null;
 };
 
 export type Source = {

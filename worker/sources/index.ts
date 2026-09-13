@@ -18,17 +18,19 @@ import { ashby } from './ashby.js';
 import { greenhouse } from './greenhouse.js';
 import { himalayas } from './himalayas.js';
 import { lever } from './lever.js';
+import { recruitee } from './recruitee.js';
 import { remoteok } from './remoteok.js';
 import { wwr } from './wwr.js';
 import type { Source } from './types.js';
 
-export const SOURCES: readonly Source[] = [remoteok, wwr, himalayas, greenhouse, lever, ashby];
+export const SOURCES: readonly Source[] = [remoteok, wwr, himalayas, greenhouse, lever, ashby, recruitee];
 
 export { BoardNotFoundError, loadWatchlist, pollBoards } from './watchlist.js';
 export type { AtsVendor, WatchlistEntry } from './watchlist.js';
 export { fetchBoard as fetchGreenhouseBoard } from './greenhouse.js';
 export { fetchBoard as fetchLeverBoard, leverSlugFromUrl } from './lever.js';
 export { fetchBoard as fetchAshbyBoard, ashbyBoardFromUrl, extractComp } from './ashby.js';
+export { fetchBoard as fetchRecruiteeBoard, recruiteeBoardFromUrl } from './recruitee.js';
 export { candidateSlugs, detectAts, detectFromUrl, detectMany, INGESTABLE } from './detect.js';
 export type { Detected, DetectVendor } from './detect.js';
 export type { RawListing, Source } from './types.js';

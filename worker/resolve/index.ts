@@ -44,6 +44,9 @@ type NewRow = {
   url: string;
   company: string | null;
   source: string;
+  /** Set at ingest by sources that publish one. Recruitee is the only one. */
+  apply_method: string | null;
+  apply_target: string | null;
 };
 
 const USER_AGENT = 'Mozilla/5.0 (compatible; job-scraper/0.1; personal job search)';
@@ -277,7 +280,7 @@ export async function runResolve(limit?: number): Promise<ResolveStats> {
   // 'new' and the next pass continues from there.
   const rows = await selectAllRowsWhere<NewRow>(
     'opportunities',
-    'id, url, company, source',
+    'id, url, company, source, apply_method, apply_target',
     'status',
     'new',
   );
@@ -313,7 +316,22 @@ export async function runResolve(limit?: number): Promise<ResolveStats> {
   const boards = new Map<string, { company: string | null; vendor: AtsVendor; token: string }>();
 
   for (const row of pending) {
-    const { resolution, fetched } = await resolveUrl(row.url, cache, row.source);
+    // A source that published an application address has already answered the
+    // question this stage exists to answer. Re-deriving it would mean fetching a
+    // page that does not contain it.
+    const { resolution, fetched } =
+      row.apply_method === 'email' && row.apply_target !== null
+        ? {
+            resolution: {
+              method: 'email' as const,
+              target: row.apply_target,
+              vendor: null,
+              boardToken: null,
+              note: `application mailbox published by ${row.source}`,
+            },
+            fetched: false,
+          }
+        : await resolveUrl(row.url, cache, row.source);
     stats.considered += 1;
     stats.byMethod[resolution.method] += 1;
     if (fetched) stats.fetched += 1;

@@ -34,10 +34,18 @@ export type Detected = {
 };
 
 /** Vendors detection can recognise, including ones with no adapter yet. */
-export type DetectVendor = AtsVendor | 'recruitee' | 'breezy';
+export type DetectVendor = AtsVendor | 'breezy';
 
 /** Vendors this codebase can actually ingest from. */
-export const INGESTABLE: readonly DetectVendor[] = ['greenhouse', 'lever', 'ashby'];
+export const INGESTABLE: readonly DetectVendor[] = ['greenhouse', 'lever', 'ashby', 'recruitee'];
+
+/**
+ * Workable is detectable but not ingestable, and never will be. Its only public
+ * endpoint returns {name, description, jobs: []} — the account is real, the jobs
+ * array is empty for every company tested, including Automattic, Rippling, Navan,
+ * Vinted and Depop. Detection still reports it because knowing which ATS a company
+ * uses is worth recording.
+ */
 
 /** "Acme Labs, Inc." -> ["acmelabs", "acme-labs", "acme"] */
 export function candidateSlugs(company: string): string[] {

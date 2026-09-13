@@ -41,6 +41,14 @@ type OpportunityRow = {
   comp_raw: string | null;
   posted_at: string | null;
   status: 'new';
+  /**
+   * Set only where the source publishes an application address — in practice only
+   * Recruitee. Written at insert time rather than left for the resolver, because
+   * the resolver reads rows back from the database and the address would be gone
+   * by then: it exists in the feed, not on the page the URL points at.
+   */
+  apply_method: 'email' | null;
+  apply_target: string | null;
 };
 
 function toRow(listing: RawListing): OpportunityRow {
@@ -56,6 +64,8 @@ function toRow(listing: RawListing): OpportunityRow {
     comp_raw: listing.compRaw,
     posted_at: listing.postedAt?.toISOString() ?? null,
     status: 'new',
+    apply_method: listing.applyEmail == null ? null : 'email',
+    apply_target: listing.applyEmail ?? null,
   };
 }
 

@@ -257,6 +257,7 @@ function collisionPolicy(): void {
     company: 'GitLab', title: 'Business Development Representative',
     description: null, url: 'https://example.com', location,
     comp_raw: null, posted_at: null, status: 'new' as const,
+    apply_method: null, apply_target: null,
   });
   const emea = 'Remote, EMEA; Remote, Germany';
   const noram = 'Remote, North America';

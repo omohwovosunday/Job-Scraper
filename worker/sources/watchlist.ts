@@ -11,7 +11,13 @@
 
 import { db } from '../lib/db.js';
 
-export type AtsVendor = 'greenhouse' | 'lever' | 'ashby' | 'workable';
+/**
+ * Vendors the watchlist can hold. Workable stays listed because detection can
+ * identify it, but it has no adapter and cannot get one: its only public endpoint
+ * returns an empty jobs array for every account tested, including Automattic,
+ * Rippling and Navan, all of which are certainly hiring.
+ */
+export type AtsVendor = 'greenhouse' | 'lever' | 'ashby' | 'workable' | 'recruitee';
 
 export type WatchlistEntry = {
   id?: string;
