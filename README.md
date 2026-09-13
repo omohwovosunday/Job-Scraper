@@ -125,6 +125,44 @@ Two caveats found by cross-checking sources against each other:
   matters. See the note on `dedupeHash` — the guarantee belongs at the send gate,
   not at ingest.
 
+## Sources evaluated and rejected
+
+Measured on 2026-09-13, so nobody repeats the work. The benchmark throughout is
+We Work Remotely: 31 rows, 14 pre-filter survivors, 12 claiming worldwide
+eligibility.
+
+| Source | Sampled | Design roles | Worldwide | Email apply | Verdict |
+|---|---|---|---|---|---|
+| Reddit (6 subs, RSS) | 175 posts | 26 | — | **0** | rejected |
+| Hacker News "Who is hiring" | 260 posts | 10 | 5 (none design) | 68 (26%) | rejected |
+| Arbeitnow | 250 jobs | 10 | 0 | — | rejected |
+| Jobicy | 50 jobs | 2 | 0 | — | rejected |
+| Working Nomads | 44 jobs | 0 | — | — | rejected |
+| Remotive | 16 jobs | 0 | — | — | rejected |
+
+**Reddit** was proposed because its posts supposedly carry direct emails, which
+would have moved the automated channel off zero. Across three runs, 26
+design-relevant hiring posts carried zero email addresses; 46% said "DM me",
+which is not automatable. The rates settle it independently — r/designjobs is a
+freelance micro-gig market ($400 logos, $100-200 game icons), not a job board.
+
+**Hacker News** is the only source found with a real email rate: 26% of posts
+carry an address, against zero everywhere else. But it is an engineering board.
+Ten design roles in 260 posts, exactly one with an email, and that one is
+US-based. The five posts that are both worldwide-eligible and contactable are all
+backend or platform engineering.
+
+That is the pattern worth remembering: **email apply paths cluster in
+engineering-centric US communities, and design roles go through applicant
+tracking systems.** Adding more general remote boards does not change it —
+Arbeitnow is a German board of mostly onsite roles, Jobicy's design roles were
+Canada-only, and the other two returned no design roles at all.
+
+The lever is not more platforms. It is the company watchlist: each
+globally-hiring employer added to it is a direct, permanent increase in eligible
+roles, and Workable and Recruitee already have 14 resolved companies waiting for
+an adapter — including Automattic, Doist and Toggl.
+
 ## What the resolver found, and what it means for automation
 
 Classifying all 1,392 rows produced:
