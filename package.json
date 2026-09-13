@@ -23,7 +23,8 @@
     "check:ats": "tsx scripts/check-ats.ts",
     "detect:watchlist": "tsx scripts/detect-watchlist.ts",
     "dashboard": "npm --prefix app run dev",
-    "dashboard:build": "npm --prefix app run build"
+    "dashboard:build": "npm --prefix app run build",
+    "measure:reddit": "tsx scripts/measure-reddit.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
