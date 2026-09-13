@@ -169,9 +169,21 @@ Classifying all 1,392 rows produced:
 
 | Apply method | Count | Routes to |
 |---|---|---|
-| `ats` | 1,293 | manual queue |
-| `form` | 99 | manual queue |
-| `email` | **0** | would be automated |
+| `ats` | 2,225 | manual queue |
+| `form` | 532 | manual queue |
+| `email` | **13** | automated |
+
+For a long time that last row read zero, and that single number was what made this
+an assistant rather than a sender. Recruitee changed it: every offer publishes
+`mailbox_email`, a per-job address that routes mail into the employer's own
+applicant tracking system as a candidate record. Three companies, thirteen rows,
+one of which is a design role that survives the pre-filter — Hostaway's Senior
+Product Designer, Mobile.
+
+Thirteen of 2,770 is still under half a percent, and the lever is obvious: every
+Recruitee company added to the watchlist contributes roles that can be applied to
+without a human. Nothing has yet been sent through one of these addresses, so the
+first live send is an experiment, not a routine.
 
 Email is the only automated send channel, so the pipeline can automate zero
 applications. Every row goes to the manual queue.
