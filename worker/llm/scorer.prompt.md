@@ -46,6 +46,30 @@ If eligibility is genuinely unclear rather than restrictive — no location lang
 at all, or "remote (worldwide)" with no eligibility line — do NOT zero it. Score it
 and set the `region_ambiguous` flag.
 
+### Regions that INCLUDE Nigeria
+
+Lagos is in Nigeria, Nigeria is in Africa, and Africa is in EMEA. So every one of
+these is an eligibility match, not a restriction:
+
+**EMEA** · **Africa** · **worldwide** · **global** · **anywhere** · **remote-first
+with no stated country**
+
+A listing that says "you must be within EMEA" is telling you he QUALIFIES. Read it
+as an inclusion and score the role on its merits. The same goes for a role based in
+a European city that states EMEA eligibility: the city is where the team sits, not a
+limit on where he may be.
+
+This is not a hypothetical. A Senior Product Designer role stating "the candidate
+must be within EMEA" was zeroed as "explicitly requires EMEA physical base" on
+2026-09-13. It was the only listing in the entire pipeline with an apply path that
+needed no human, and the mistake was invisible, because a zeroed row is marked
+skipped and nobody reads it again. A wrong zero costs more than a wrong pass: a bad
+pass wastes one application, a bad zero silently removes a real job.
+
+If a region term genuinely excludes Nigeria (EU-only, UK-only, US, LATAM, APAC,
+North America), zero it as above. The test is whether Nigeria falls inside the named
+region, not whether the region sounds foreign.
+
 ## Step 2 — Score
 
 Only if no hard zero applies. Award points across six dimensions, total 100.

@@ -3,20 +3,16 @@
 Runs once per listing that passed the scorer. Model: `claude-sonnet-5` — this is the
 one place worth the better model; it's writing something a human will judge you on.
 
-## Config additions for `config.ts`
+## Config
 
-```ts
-export const DRAFTER_CONFIG = {
-  model: 'claude-sonnet-5',
-  maxWords: {
-    email: 150,
-    ats_cover_letter: 200,
-    free_text_answer: 120,
-  },
-  minConfidence: 0.7,      // below this, downgrade tier to 'manual'
-  voiceSamplePath: 'knowledge/voice-sample.md',
-} as const;
-```
+Built on 2026-09-13. `DRAFTER_CONFIG` lives in `config.ts` and the stage is
+`worker/llm/drafter.ts`; this file is now the prompt source, not a plan.
+
+Two things changed from the sketch that was here before. `voiceSamplePath` is gone:
+the voice sample is read from the `knowledge` table like everything else, because
+`/knowledge` is gitignored and Actions has no copy of it. And the model is named in
+`config.ts` rather than `provider.ts`, since unlike the scorer there is no provider
+choice to make here — see `draftingModel()`.
 
 ---
 

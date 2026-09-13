@@ -131,6 +131,47 @@ export const RESUME_VARIANTS = [
 ] as const;
 
 /**
+ * The drafter. Unlike the scorer, the model is named here rather than in
+ * provider.ts, because there is no provider choice to make: it is always Claude.
+ * See draftingModel() for why that is deliberate and not an oversight.
+ */
+export const DRAFTER_CONFIG = {
+  model: 'claude-sonnet-5',
+
+  /**
+   * Hard ceilings, not targets. Enforced in code after the model returns, because
+   * a word limit in a prompt is a suggestion and this one is load-bearing: an ATS
+   * field that silently truncates at its own limit would cut the letter mid-sentence.
+   */
+  maxWords: {
+    email: 150,
+    ats_cover_letter: 200,
+    free_text_answer: 120,
+  },
+
+  /** Below this the draft still gets written, but routes to manual review. */
+  minConfidence: 0.7,
+
+  /**
+   * Mostly thinking budget, not letter budget.
+   *
+   * claude-sonnet-5 reasons before answering and those tokens count against
+   * max_tokens. At 2048 a measured run spent all 2048 on thinking and returned an
+   * empty string with stop_reason max_tokens — a letter of zero characters,
+   * reported as "truncated". At 8192 the same request used 1,713 thinking tokens
+   * and finished with end_turn.
+   *
+   * This is the same failure Gemini had with thinking_level: 'low' eating the JSON
+   * budget, and it was assumed to be Gemini-specific when it is not. Any model that
+   * thinks before answering needs the budget to cover both.
+   */
+  maxOutputTokens: 8192,
+} as const;
+
+export type DraftFormat = keyof typeof DRAFTER_CONFIG.maxWords;
+export const DRAFT_FORMATS = Object.keys(DRAFTER_CONFIG.maxWords) as DraftFormat[];
+
+/**
  * gettranzport and agta are dropped as of 2026-09-12 — their Problem / What I did /
  * Hard part sections were never completed, and the drafter must not select a case
  * study it cannot quote from. Re-adding one is this line plus a knowledge table row.

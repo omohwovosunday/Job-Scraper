@@ -16,6 +16,7 @@ import { finishRun, raiseAlert, startRun, alerts, type Stage } from './lib/alert
 import { runIngest } from './lib/ingest.js';
 import { readSettings } from './lib/settings.js';
 import { assertCommercialEnv } from './llm/config.js';
+import { runDraft } from './llm/drafter.js';
 import { runScore } from './llm/scorer.js';
 import { runResolve } from './resolve/index.js';
 import { SOURCES } from './sources/index.js';
@@ -83,8 +84,25 @@ async function processStage(): Promise<Record<string, unknown>> {
     .join(' ');
   if (reasons !== '') console.log(`prefilter ${reasons}`);
 
-  console.log('The drafter is build order step 7 and is not built yet.');
-  return { ...scored };
+  const drafted = await runDraft();
+  console.log(
+    `draft considered=${drafted.considered} drafted=${drafted.drafted} ` +
+      `auto=${drafted.auto} auto_flagged=${drafted.autoFlagged} manual=${drafted.manual} ` +
+      `failed=${drafted.failed} apiCalls=${drafted.apiCalls}`,
+  );
+  const downgrades = Object.entries(drafted.downgradeReasons)
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, n]) => `${reason}=${n}`)
+    .join(' ');
+  if (downgrades !== '') console.log(`downgrades ${downgrades}`);
+
+  // Worth saying every run until step 9 exists. "drafted" reads like an outbox,
+  // and it is not one: nothing in this codebase can send.
+  console.log('Drafts are written. Sending is build order step 9 and is not built yet.');
+  // Namespaced, not spread together: both stats objects carry considered, failed
+  // and apiCalls, so a flat merge would silently record the drafter's numbers as
+  // the scorer's in run_log and the dashboard would report the wrong API spend.
+  return { score: { ...scored }, draft: { ...drafted } };
 }
 
 async function main(): Promise<void> {

@@ -20,6 +20,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 import { optionalString, requireString } from '../lib/env.js';
 import { parseJsonLoosely } from './client.js';
+import { DRAFTER_CONFIG } from './config.js';
 
 /** A JSON Schema object, loose by design — each provider supports its own subset. */
 export type JsonSchema = Record<string, unknown>;
@@ -193,15 +194,14 @@ function geminiModel(): JsonModel {
 
 const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-4-5';
 
-function anthropicModel(): JsonModel {
-  const modelId = optionalString('ANTHROPIC_SCORER_MODEL') ?? ANTHROPIC_DEFAULT_MODEL;
+function anthropicModel(modelId: string, purpose: string): JsonModel {
   let client: Anthropic | undefined;
 
   return {
     label: `anthropic:${modelId}`,
     async completeJson(request: JsonRequest): Promise<JsonResult> {
       client ??= new Anthropic({
-        apiKey: requireString('ANTHROPIC_API_KEY', 'Required by the scorer when SCORER_PROVIDER=anthropic.'),
+        apiKey: requireString('ANTHROPIC_API_KEY', `Required by the ${purpose}.`),
         maxRetries: 3,
       });
 
@@ -249,13 +249,39 @@ export function scoringModel(): JsonModel {
     );
   }
 
-  cached = requested === 'gemini' ? geminiModel() : anthropicModel();
+  cached = requested === 'gemini'
+    ? geminiModel()
+    : anthropicModel(
+        optionalString('ANTHROPIC_SCORER_MODEL') ?? ANTHROPIC_DEFAULT_MODEL,
+        'scorer when SCORER_PROVIDER=anthropic',
+      );
   return cached;
+}
+
+let cachedDrafter: JsonModel | undefined;
+
+/**
+ * Which model writes the applications. Always Anthropic, deliberately.
+ *
+ * SCORER_PROVIDER does not reach here. The scorer is a classifier whose output is a
+ * number nobody reads, so it can follow whichever provider is cheapest that week;
+ * the drafter writes prose a hiring manager judges the candidate on, and switching
+ * that on a cost decision is not the same trade. It is also the one stage where the
+ * better model is worth paying for, since it runs once per passing listing rather
+ * than once per ten candidates.
+ */
+export function draftingModel(): JsonModel {
+  cachedDrafter ??= anthropicModel(
+    optionalString('ANTHROPIC_DRAFTER_MODEL') ?? DRAFTER_CONFIG.model,
+    'drafter',
+  );
+  return cachedDrafter;
 }
 
 /** Test seam. */
 export function resetScoringModel(): void {
   cached = undefined;
+  cachedDrafter = undefined;
 }
 
 /**

@@ -25,7 +25,9 @@
     "dashboard": "npm --prefix app run dev",
     "dashboard:build": "npm --prefix app run build",
     "measure:reddit": "tsx scripts/measure-reddit.ts",
-    "score:smoke": "tsx scripts/score-smoke.ts"
+    "score:smoke": "tsx scripts/score-smoke.ts",
+    "check:drafter": "tsx scripts/check-drafter.ts",
+    "draft:smoke": "tsx scripts/draft-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
