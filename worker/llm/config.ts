@@ -135,6 +135,33 @@ export const RESUME_VARIANTS = [
  * provider.ts, because there is no provider choice to make: it is always Claude.
  * See draftingModel() for why that is deliberate and not an oversight.
  */
+/**
+ * Cost pass, 2026-09-14. Measured, not estimated.
+ *
+ * The drafter is ~95% of this project's API spend; the scorer is rounding error.
+ * Per call: ~9,200 input tokens and ~2,158 output, of which 1,713 are thinking.
+ * So the bill is roughly half input, half output, and most of the output is
+ * reasoning nobody reads.
+ *
+ * APPLIED — prompt caching. 6,573 input tokens per call were byte-identical and
+ * re-billed at full price, uncacheable because the case study sat above the voice
+ * sample and caching is a prefix match. Reordered; measured 83% hit rate, input
+ * down 38%, total down 18%.
+ *
+ * SKIPPED, and why, so this is not re-argued:
+ *
+ *   Batch API (50% off, no quality cost) — right for a backfill, wrong here. Batch
+ *   requests are single-shot, so the corrective retry that fires on roughly a third
+ *   of drafts becomes a second batch round: up to 48 hours for one letter. Job
+ *   listings are competitive, and a day's delay costs more than the ~$0.017 a draft
+ *   it saves at this volume.
+ *
+ *   effort: 'low' and a Haiku swap — both real money, both trades against the one
+ *   stage whose output a hiring manager judges, and there is no eval to tell a
+ *   saving from a regression. The prerequisite is a ~20-case eval, not a config
+ *   change. Thinking tokens are ~$0.017 a draft, larger than caching saved, so this
+ *   is where the remaining money is when there is something to validate against.
+ */
 export const DRAFTER_CONFIG = {
   model: 'claude-sonnet-5',
 
