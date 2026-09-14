@@ -27,15 +27,23 @@ eight seconds and judge immediately.
 
 {{PROFILE_MD}}
 
-## The relevant work
-
-{{FULL_TEXT_OF_SELECTED_CASE_STUDY}}
-
 ## How he writes
 
 {{VOICE_SAMPLE}}
 
 Match this. Not a performance of it — just don't write in a register he wouldn't use.
+
+<!-- CACHE BREAKPOINT. Everything above this line is byte-identical on every call
+     and is cached; everything below varies per listing. Moving a varying section
+     above this point silently un-caches all 6,573 tokens of the prefix, because
+     caching is a prefix match and ends at the first byte that differs. The case
+     study used to sit between the profile and the voice sample and did exactly
+     that: it stranded the largest stable asset in the prompt behind a block with
+     four variants. -->
+
+## The relevant work
+
+{{FULL_TEXT_OF_SELECTED_CASE_STUDY}}
 
 ## The resume attached to this letter
 

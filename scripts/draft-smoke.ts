@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   console.log(
     `\ndraft considered=${stats.considered} drafted=${stats.drafted} auto=${stats.auto} ` +
       `auto_flagged=${stats.autoFlagged} manual=${stats.manual} failed=${stats.failed} ` +
-      `apiCalls=${stats.apiCalls}`,
+      `apiCalls=${stats.apiCalls} cache_created=${stats.cacheCreated} cache_read=${stats.cacheRead}`,
   );
 
   const rows = await selectAllRowsWhere<Drafted>(

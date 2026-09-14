@@ -41,7 +41,7 @@ import {
 } from './config.js';
 import { interpolate, loadSystemPromptTemplate } from './scorer.js';
 import { draftingModel } from './provider.js';
-import type { JsonModel } from './provider.js';
+import type { JsonModel, SystemBlock } from './provider.js';
 
 const PROMPT_PATH = 'worker/llm/drafter.prompt.md';
 
@@ -67,6 +67,9 @@ export type DrafterStats = {
   manual: number;
   failed: number;
   apiCalls: number;
+  /** Cache meters, summed. Verified from usage, never from code review. */
+  cacheCreated: number;
+  cacheRead: number;
   downgradeReasons: Record<string, number>;
 };
 
@@ -182,11 +185,34 @@ function isCaseStudy(slug: string | null): slug is CaseStudy {
   return slug !== null && (CASE_STUDIES as readonly string[]).includes(slug);
 }
 
+/**
+ * Splits the rendered prompt into its cached prefix and its per-listing tail.
+ *
+ * The marker is a comment in drafter.prompt.md rather than a constant here so the
+ * ordering and the reason for it stay next to the text they govern. If the marker
+ * ever goes missing the prompt is sent as one uncached block: that costs money and
+ * changes nothing about the output, which is the right way for this to fail.
+ */
+const CACHE_MARKER = '<!-- CACHE BREAKPOINT.';
+
+export function splitAtCacheMarker(rendered: string): SystemBlock[] {
+  const at = rendered.indexOf(CACHE_MARKER);
+  if (at === -1) return [{ text: rendered }];
+
+  const end = rendered.indexOf('-->', at);
+  if (end === -1) return [{ text: rendered }];
+
+  return [
+    { text: rendered.slice(0, at), cache: true },
+    { text: rendered.slice(end + 3) },
+  ];
+}
+
 export async function buildSystemPrompt(
   row: Candidate,
   format: DraftFormat,
   caseStudy: CaseStudy,
-): Promise<{ system: string; sources: string }> {
+): Promise<{ system: SystemBlock[]; sources: string }> {
   const template = await loadSystemPromptTemplate(PROMPT_PATH);
   const [profile, voice, study] = await Promise.all([
     getKnowledge('profile'),
@@ -216,18 +242,19 @@ export async function buildSystemPrompt(
   // What the numeric check is allowed to draw on. The listing is included because
   // a salary or team size quoted back from the posting is not invented.
   const sources = [profile, study, row.description ?? '', row.title].join('\n');
-  return { system, sources };
+  return { system: splitAtCacheMarker(system), sources };
 }
 
 type Attempt = {
   draft: Draft | null;
   problems: string[];
   calls: number;
+  cache: { created: number; read: number };
 };
 
 async function requestDraft(
   model: JsonModel,
-  system: string,
+  system: SystemBlock[],
   user: string,
   sources: string,
   format: DraftFormat,
@@ -241,7 +268,7 @@ async function requestDraft(
 
   const parsed = validateDraft(result.value);
   if (parsed === null) {
-    return { draft: null, problems: [result.truncated ? 'response truncated' : 'unparseable JSON'], calls: 1 };
+    return { draft: null, problems: [result.truncated ? 'response truncated' : 'unparseable JSON'], calls: 1, cache: result.cache ?? { created: 0, read: 0 } };
   }
 
   // Only email has a subject line. The prompt says so, and the model still
@@ -265,7 +292,7 @@ async function requestDraft(
     for (const hit of bannedHits(draft.subject)) problems.push(`banned in subject: ${hit}`);
   }
 
-  return { draft, problems, calls: 1 };
+  return { draft, problems, calls: 1, cache: result.cache ?? { created: 0, read: 0 } };
 }
 
 /** One listing, with a single corrective retry when the first attempt has problems. */
@@ -274,7 +301,7 @@ export async function draftOne(
   row: Candidate,
   format: DraftFormat,
   caseStudy: CaseStudy,
-): Promise<{ draft: Draft | null; problems: string[]; calls: number }> {
+): Promise<Attempt> {
   const { system, sources } = await buildSystemPrompt(row, format, caseStudy);
   const user = `Write the ${format} for this listing. Return JSON only.`;
 
@@ -290,15 +317,19 @@ export async function draftOne(
 
   const second = await requestDraft(model, system, correction, sources, format);
   const calls = first.calls + second.calls;
+  const cache = {
+    created: first.cache.created + second.cache.created,
+    read: first.cache.read + second.cache.read,
+  };
 
   // Keep whichever attempt is cleaner rather than blindly preferring the retry.
-  if (second.draft !== null && second.problems.length === 0) return { ...second, calls };
-  if (second.draft !== null && first.draft === null) return { ...second, calls };
+  if (second.draft !== null && second.problems.length === 0) return { ...second, calls, cache };
+  if (second.draft !== null && first.draft === null) return { ...second, calls, cache };
   if (first.draft !== null && second.draft !== null) {
     const better = second.problems.length < first.problems.length ? second : first;
-    return { ...better, calls };
+    return { ...better, calls, cache };
   }
-  return { draft: first.draft ?? second.draft, problems: second.problems, calls };
+  return { draft: first.draft ?? second.draft, problems: second.problems, calls, cache };
 }
 
 /**
@@ -344,6 +375,8 @@ export async function runDraft(limit?: number): Promise<DrafterStats> {
     manual: 0,
     failed: 0,
     apiCalls: 0,
+    cacheCreated: 0,
+    cacheRead: 0,
     downgradeReasons: {},
   };
   if (pending.length === 0) return stats;
@@ -366,8 +399,10 @@ export async function runDraft(limit?: number): Promise<DrafterStats> {
       continue;
     }
 
-    const { draft, problems, calls } = await draftOne(model, row, format, row.case_study_used);
+    const { draft, problems, calls, cache } = await draftOne(model, row, format, row.case_study_used);
     stats.apiCalls += calls;
+    stats.cacheCreated += cache.created;
+    stats.cacheRead += cache.read;
 
     if (draft === null) {
       await db().from('opportunities')

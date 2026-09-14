@@ -25,8 +25,22 @@ import { DRAFTER_CONFIG } from './config.js';
 /** A JSON Schema object, loose by design — each provider supports its own subset. */
 export type JsonSchema = Record<string, unknown>;
 
+/**
+ * One span of the system prompt. `cache: true` marks the end of the stable prefix.
+ *
+ * Caching is a prefix match: it ends at the first byte that differs between two
+ * requests, so the breakpoint has to sit after everything identical and before
+ * everything that varies. A block order that interleaves the two caches nothing.
+ */
+export type SystemBlock = { text: string; cache?: boolean };
+
+/** Blocks rejoined into one string, for providers with no cache-breakpoint concept. */
+export function flattenSystem(system: string | SystemBlock[]): string {
+  return typeof system === 'string' ? system : system.map((b) => b.text).join('');
+}
+
 export type JsonRequest = {
-  system: string;
+  system: string | SystemBlock[];
   user: string;
   /** Honoured where the provider can enforce it; advisory otherwise. */
   schema: JsonSchema;
@@ -34,6 +48,12 @@ export type JsonRequest = {
 };
 
 export type JsonResult = {
+  /**
+   * What the cache actually did, where the provider reports it. Read this rather
+   * than reviewing the code: a cache that silently stops hitting looks exactly
+   * like one that works, and only the meters tell them apart.
+   */
+  cache?: { created: number; read: number };
   /** Parsed JSON, or null when the response could not be parsed. */
   value: unknown | null;
   /** Provider status where it reports one: "completed", "incomplete", ... */
@@ -151,7 +171,10 @@ function geminiModel(): JsonModel {
         return client!.interactions.create({
         model: modelId,
         input: request.user,
-        system_instruction: request.system,
+        // Flattened: this path has no cache breakpoints, so the blocks are just
+        // rejoined in order. The ordering still matters if caching is ever added
+        // here, which is why the split is done by the caller and not the provider.
+        system_instruction: flattenSystem(request.system),
         // Schema-constrained output. This is why Gemini is a good fit for the
         // scorer specifically: the shape is enforced rather than requested.
         response_format: {
@@ -194,6 +217,26 @@ function geminiModel(): JsonModel {
 
 const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-4-5';
 
+/**
+ * Renders the system prompt, marking the cache breakpoint where one is asked for.
+ *
+ * A cached prefix has to clear the model's minimum cacheable length or it silently
+ * does not cache at all — no error, just full-price input forever. The drafter's
+ * stable prefix is around 6,600 tokens, comfortably clear; a short one would not be,
+ * which is why the breakpoint is a request from the caller rather than something
+ * this function adds on its own.
+ */
+function toAnthropicSystem(
+  system: string | SystemBlock[],
+): string | Anthropic.TextBlockParam[] {
+  if (typeof system === 'string') return system;
+  return system.map((block) => ({
+    type: 'text' as const,
+    text: block.text,
+    ...(block.cache === true ? { cache_control: { type: 'ephemeral' as const } } : {}),
+  }));
+}
+
 function anthropicModel(modelId: string, purpose: string): JsonModel {
   let client: Anthropic | undefined;
 
@@ -208,7 +251,7 @@ function anthropicModel(modelId: string, purpose: string): JsonModel {
       const message = await client.messages.create({
         model: modelId,
         max_tokens: request.maxOutputTokens,
-        system: request.system,
+        system: toAnthropicSystem(request.system),
         messages: [{ role: 'user', content: request.user }],
       });
 
@@ -220,10 +263,18 @@ function anthropicModel(modelId: string, purpose: string): JsonModel {
         .join('');
 
       const stop = message.stop_reason ?? 'unknown';
+      const usage = message.usage as {
+        cache_creation_input_tokens?: number | null;
+        cache_read_input_tokens?: number | null;
+      };
       return {
         value: parseJsonLoosely(text),
         status: stop,
         truncated: stop === 'max_tokens',
+        cache: {
+          created: usage.cache_creation_input_tokens ?? 0,
+          read: usage.cache_read_input_tokens ?? 0,
+        },
       };
     },
   };
